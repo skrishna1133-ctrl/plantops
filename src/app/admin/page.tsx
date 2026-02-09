@@ -430,7 +430,13 @@ export default function AdminPage() {
       {/* Incident Detail Dialog */}
       <Dialog
         open={!!selectedIncident}
-        onOpenChange={() => setSelectedIncident(null)}
+        onOpenChange={(open) => {
+          if (!open && photoPreview) {
+            setPhotoPreview(null);
+            return;
+          }
+          if (!open) setSelectedIncident(null);
+        }}
       >
         <DialogContent className="sm:max-w-lg">
           {selectedIncident && (
