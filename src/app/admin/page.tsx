@@ -12,6 +12,8 @@ import {
   LogOut,
   ImageIcon,
   X,
+  ClipboardList,
+  FileCheck,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -40,6 +42,8 @@ import {
 } from "@/components/ui/dialog";
 import { Separator } from "@/components/ui/separator";
 import type { IncidentReport } from "@/lib/schemas";
+import ChecklistTemplatesTab from "@/components/admin/checklist-templates-tab";
+import ChecklistSubmissionsTab from "@/components/admin/checklist-submissions-tab";
 
 const criticalityColors: Record<string, string> = {
   minor: "bg-yellow-500/20 text-yellow-400 border-yellow-500/30",
@@ -71,7 +75,10 @@ const plantLabels: Record<string, string> = {
   "plant-b": "Plant B",
 };
 
+type AdminTab = "incidents" | "templates" | "submissions";
+
 export default function AdminPage() {
+  const [activeTab, setActiveTab] = useState<AdminTab>("incidents");
   const [incidents, setIncidents] = useState<IncidentReport[]>([]);
   const [loading, setLoading] = useState(true);
   const [filterPlant, setFilterPlant] = useState<string>("all");
@@ -182,23 +189,25 @@ export default function AdminPage() {
                 Admin Dashboard
               </h1>
               <p className="text-xs text-muted-foreground">
-                Incident Reports Management
+                Plant Operations Management
               </p>
             </div>
           </div>
           <div className="flex items-center gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={fetchIncidents}
-              disabled={loading}
-            >
-              <RefreshCw
-                size={14}
-                className={`mr-2 ${loading ? "animate-spin" : ""}`}
-              />
-              Refresh
-            </Button>
+            {activeTab === "incidents" && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={fetchIncidents}
+                disabled={loading}
+              >
+                <RefreshCw
+                  size={14}
+                  className={`mr-2 ${loading ? "animate-spin" : ""}`}
+                />
+                Refresh
+              </Button>
+            )}
             <Button
               variant="ghost"
               size="sm"
@@ -212,7 +221,41 @@ export default function AdminPage() {
         </div>
       </header>
 
+      {/* Tab Navigation */}
+      <div className="border-b border-border bg-card">
+        <div className="max-w-7xl mx-auto px-4">
+          <nav className="flex gap-1">
+            {([
+              { id: "incidents" as AdminTab, label: "Incidents", icon: AlertTriangle },
+              { id: "templates" as AdminTab, label: "Templates", icon: ClipboardList },
+              { id: "submissions" as AdminTab, label: "Submissions", icon: FileCheck },
+            ]).map((tab) => (
+              <button
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id)}
+                className={`flex items-center gap-2 px-4 py-3 text-sm font-medium border-b-2 transition-colors ${
+                  activeTab === tab.id
+                    ? "border-orange-500 text-foreground"
+                    : "border-transparent text-muted-foreground hover:text-foreground hover:border-border"
+                }`}
+              >
+                <tab.icon size={16} />
+                {tab.label}
+              </button>
+            ))}
+          </nav>
+        </div>
+      </div>
+
       <main className="max-w-7xl mx-auto px-4 py-6 space-y-6">
+        {/* Templates Tab */}
+        {activeTab === "templates" && <ChecklistTemplatesTab />}
+
+        {/* Submissions Tab */}
+        {activeTab === "submissions" && <ChecklistSubmissionsTab />}
+
+        {/* Incidents Tab */}
+        {activeTab === "incidents" && <>
         {/* Stats Cards */}
         <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
           <Card>
@@ -404,6 +447,7 @@ export default function AdminPage() {
             )}
           </CardContent>
         </Card>
+        </>}
       </main>
 
       {/* Photo Preview Popup */}

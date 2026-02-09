@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { AlertTriangle, Wrench, ClipboardCheck, Package, Clock, FileText, Shield } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -27,13 +28,13 @@ const tools = [
     available: false,
   },
   {
-    id: "safety-checklist",
-    name: "Safety Checklist",
-    description: "Complete daily safety inspection checklists",
+    id: "checklists",
+    name: "Checklists",
+    description: "Complete shift, safety, quality, and maintenance checklists",
     icon: ClipboardCheck,
     color: "text-green-500",
     bgColor: "bg-green-500/10 hover:bg-green-500/20",
-    available: false,
+    available: true,
   },
   {
     id: "inventory",
@@ -65,11 +66,14 @@ const tools = [
 ];
 
 export default function Home() {
+  const router = useRouter();
   const [incidentDialogOpen, setIncidentDialogOpen] = useState(false);
 
   const handleToolClick = (toolId: string) => {
     if (toolId === "incident-report") {
       setIncidentDialogOpen(true);
+    } else if (toolId === "checklists") {
+      router.push("/checklists");
     }
   };
 
