@@ -87,6 +87,9 @@ export interface ItemResponse {
   checkboxValue?: boolean;
   passFail?: "pass" | "fail";
   numericValue?: number;
+  numericMin?: number;
+  numericMax?: number;
+  numericUnit?: string;
   textValue?: string;
 }
 

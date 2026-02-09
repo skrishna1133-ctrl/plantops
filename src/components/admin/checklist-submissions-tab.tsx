@@ -35,9 +35,19 @@ function getFlags(sub: ChecklistSubmission): string[] {
     if (r.itemType === "pass_fail" && r.passFail === "fail") {
       flags.push(`${r.itemTitle}: Failed`);
     }
+    if (r.itemType === "numeric" && r.numericValue !== undefined) {
+      if (r.numericMin !== undefined && r.numericValue < r.numericMin) {
+        flags.push(`${r.itemTitle}: ${r.numericValue} below min ${r.numericMin}${r.numericUnit ? " " + r.numericUnit : ""}`);
+      }
+      if (r.numericMax !== undefined && r.numericValue > r.numericMax) {
+        flags.push(`${r.itemTitle}: ${r.numericValue} above max ${r.numericMax}${r.numericUnit ? " " + r.numericUnit : ""}`);
+      }
+    }
   }
   return flags;
 }
+
+export { getFlags };
 
 export default function ChecklistSubmissionsTab() {
   const [submissions, setSubmissions] = useState<ChecklistSubmission[]>([]);

@@ -14,6 +14,7 @@ import {
   X,
   ClipboardList,
   FileCheck,
+  BarChart3,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -44,6 +45,7 @@ import { Separator } from "@/components/ui/separator";
 import type { IncidentReport } from "@/lib/schemas";
 import ChecklistTemplatesTab from "@/components/admin/checklist-templates-tab";
 import ChecklistSubmissionsTab from "@/components/admin/checklist-submissions-tab";
+import ChecklistReportsTab from "@/components/admin/checklist-reports-tab";
 
 const criticalityColors: Record<string, string> = {
   minor: "bg-yellow-500/20 text-yellow-400 border-yellow-500/30",
@@ -75,7 +77,7 @@ const plantLabels: Record<string, string> = {
   "plant-b": "Plant B",
 };
 
-type AdminTab = "incidents" | "templates" | "submissions";
+type AdminTab = "incidents" | "templates" | "submissions" | "reports";
 
 export default function AdminPage() {
   const [activeTab, setActiveTab] = useState<AdminTab>("incidents");
@@ -229,6 +231,7 @@ export default function AdminPage() {
               { id: "incidents" as AdminTab, label: "Incidents", icon: AlertTriangle },
               { id: "templates" as AdminTab, label: "Templates", icon: ClipboardList },
               { id: "submissions" as AdminTab, label: "Submissions", icon: FileCheck },
+              { id: "reports" as AdminTab, label: "Reports", icon: BarChart3 },
             ]).map((tab) => (
               <button
                 key={tab.id}
@@ -253,6 +256,9 @@ export default function AdminPage() {
 
         {/* Submissions Tab */}
         {activeTab === "submissions" && <ChecklistSubmissionsTab />}
+
+        {/* Reports Tab */}
+        {activeTab === "reports" && <ChecklistReportsTab />}
 
         {/* Incidents Tab */}
         {activeTab === "incidents" && <>

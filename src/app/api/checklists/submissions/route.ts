@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { checklistTemplates, checklistSubmissions } from "@/lib/store";
 import { v4 as uuidv4 } from "uuid";
-import type { ChecklistSubmission } from "@/lib/schemas";
+import type { ChecklistSubmission, ItemResponse } from "@/lib/schemas";
 
 function generateSubmissionId(): string {
   const prefix = "CHK";
@@ -45,6 +45,20 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Template not found" }, { status: 404 });
     }
 
+    // Enrich responses with numeric ranges from template
+    const enrichedResponses = (responses as ItemResponse[]).map((r) => {
+      const templateItem = template.items.find((i) => i.id === r.itemId);
+      if (templateItem && templateItem.type === "numeric") {
+        return {
+          ...r,
+          numericMin: templateItem.numericMin,
+          numericMax: templateItem.numericMax,
+          numericUnit: templateItem.unit,
+        };
+      }
+      return r;
+    });
+
     const submission: ChecklistSubmission = {
       id: uuidv4(),
       submissionId: generateSubmissionId(),
@@ -53,7 +67,7 @@ export async function POST(request: NextRequest) {
       templateType: template.type,
       personName,
       shift,
-      responses,
+      responses: enrichedResponses,
       notes: notes || undefined,
       submittedAt: new Date().toISOString(),
     };
