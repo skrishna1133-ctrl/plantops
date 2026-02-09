@@ -35,7 +35,9 @@ export async function POST(request: NextRequest) {
     let photoUrl: string | undefined;
 
     if (photo && photo.size > 0) {
-      photoUrl = `photo_${Date.now()}_${photo.name}`;
+      const bytes = await photo.arrayBuffer();
+      const base64 = Buffer.from(bytes).toString("base64");
+      photoUrl = `data:${photo.type};base64,${base64}`;
     }
 
     const incident = {

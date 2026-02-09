@@ -10,6 +10,8 @@ import {
   Filter,
   Trash2,
   LogOut,
+  ImageIcon,
+  X,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -77,6 +79,7 @@ export default function AdminPage() {
   const [filterStatus, setFilterStatus] = useState<string>("all");
   const [selectedIncident, setSelectedIncident] =
     useState<IncidentReport | null>(null);
+  const [photoPreview, setPhotoPreview] = useState<string | null>(null);
 
   const router = useRouter();
 
@@ -328,6 +331,7 @@ export default function AdminPage() {
                       <TableHead>Category</TableHead>
                       <TableHead>Criticality</TableHead>
                       <TableHead>Status</TableHead>
+                      <TableHead>Photo</TableHead>
                       <TableHead>Date</TableHead>
                       <TableHead className="w-[100px]">Actions</TableHead>
                     </TableRow>
@@ -369,6 +373,13 @@ export default function AdminPage() {
                             {statusLabels[incident.status] || incident.status}
                           </Badge>
                         </TableCell>
+                        <TableCell>
+                          {incident.photoUrl ? (
+                            <ImageIcon size={16} className="text-green-400" />
+                          ) : (
+                            <span className="text-muted-foreground text-xs">-</span>
+                          )}
+                        </TableCell>
                         <TableCell className="text-sm text-muted-foreground">
                           {new Date(incident.incidentDate).toLocaleDateString()}
                         </TableCell>
@@ -394,6 +405,27 @@ export default function AdminPage() {
           </CardContent>
         </Card>
       </main>
+
+      {/* Photo Preview Popup */}
+      {photoPreview && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm"
+          onClick={() => setPhotoPreview(null)}
+        >
+          <button
+            className="absolute top-4 right-4 text-white bg-black/50 hover:bg-black/70 rounded-full p-2 transition-colors"
+            onClick={() => setPhotoPreview(null)}
+          >
+            <X size={24} />
+          </button>
+          <img
+            src={photoPreview}
+            alt="Incident photo enlarged"
+            className="max-w-[90vw] max-h-[85vh] object-contain rounded-lg shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          />
+        </div>
+      )}
 
       {/* Incident Detail Dialog */}
       <Dialog
@@ -467,11 +499,24 @@ export default function AdminPage() {
                 {selectedIncident.photoUrl && (
                   <div>
                     <p className="text-sm text-muted-foreground mb-1">
-                      Photo Attached
+                      Photo Evidence
                     </p>
-                    <p className="text-xs text-muted-foreground bg-muted/50 rounded-lg p-3 font-mono">
-                      {selectedIncident.photoUrl}
-                    </p>
+                    <div
+                      className="relative cursor-pointer group rounded-lg overflow-hidden border border-border"
+                      onClick={() => setPhotoPreview(selectedIncident.photoUrl!)}
+                    >
+                      <img
+                        src={selectedIncident.photoUrl}
+                        alt="Incident photo"
+                        className="w-full max-h-48 object-cover transition-opacity group-hover:opacity-80"
+                      />
+                      <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity bg-black/30">
+                        <div className="bg-black/70 text-white text-xs px-3 py-1.5 rounded-full flex items-center gap-1.5">
+                          <ImageIcon size={12} />
+                          Click to enlarge
+                        </div>
+                      </div>
+                    </div>
                   </div>
                 )}
 
