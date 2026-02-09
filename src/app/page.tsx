@@ -1,8 +1,10 @@
 "use client";
 
 import { useState } from "react";
-import { AlertTriangle, Wrench, ClipboardCheck, Package, Clock, FileText } from "lucide-react";
+import Link from "next/link";
+import { AlertTriangle, Wrench, ClipboardCheck, Package, Clock, FileText, Shield } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
 import IncidentReportDialog from "@/components/incident-report-dialog";
 
 const tools = [
@@ -75,14 +77,22 @@ export default function Home() {
     <div className="min-h-screen bg-background">
       {/* Header */}
       <header className="border-b border-border bg-card sticky top-0 z-10">
-        <div className="max-w-5xl mx-auto px-4 py-4 flex items-center gap-3">
-          <div className="w-10 h-10 rounded-lg bg-orange-500 flex items-center justify-center">
-            <span className="text-white font-bold text-lg">P</span>
+        <div className="max-w-5xl mx-auto px-4 py-4 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-lg bg-orange-500 flex items-center justify-center">
+              <span className="text-white font-bold text-lg">P</span>
+            </div>
+            <div>
+              <h1 className="text-xl font-bold tracking-tight">PlantOps</h1>
+              <p className="text-xs text-muted-foreground">Manufacturing Operations Suite</p>
+            </div>
           </div>
-          <div>
-            <h1 className="text-xl font-bold tracking-tight">PlantOps</h1>
-            <p className="text-xs text-muted-foreground">Manufacturing Operations Suite</p>
-          </div>
+          <Link href="/admin">
+            <Button variant="outline" size="sm">
+              <Shield size={14} className="mr-2" />
+              Admin
+            </Button>
+          </Link>
         </div>
       </header>
 

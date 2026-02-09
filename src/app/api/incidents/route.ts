@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { incidentReportSchema } from "@/lib/schemas";
+import { incidents } from "@/lib/store";
 import { v4 as uuidv4 } from "uuid";
 
 function generateTicketId(): string {
@@ -8,9 +9,6 @@ function generateTicketId(): string {
   const random = Math.random().toString(36).substring(2, 6).toUpperCase();
   return `${prefix}-${date}-${random}`;
 }
-
-// In-memory store for development (will be replaced with Vercel Postgres)
-const incidents: Array<Record<string, unknown>> = [];
 
 export async function POST(request: NextRequest) {
   try {
@@ -25,7 +23,6 @@ export async function POST(request: NextRequest) {
       incidentDate: formData.get("incidentDate") as string,
     };
 
-    // Validate input
     const parsed = incidentReportSchema.safeParse(data);
     if (!parsed.success) {
       return NextResponse.json(
@@ -38,7 +35,6 @@ export async function POST(request: NextRequest) {
     let photoUrl: string | undefined;
 
     if (photo && photo.size > 0) {
-      // For now, we'll store a placeholder. In production, upload to Vercel Blob or S3.
       photoUrl = `photo_${Date.now()}_${photo.name}`;
     }
 
@@ -51,9 +47,7 @@ export async function POST(request: NextRequest) {
       createdAt: new Date().toISOString(),
     };
 
-    // Store in memory for now (replace with DB insert later)
     incidents.push(incident);
-    console.log("New incident reported:", incident);
 
     return NextResponse.json(
       { ticketId: incident.ticketId, id: incident.id },
@@ -69,5 +63,6 @@ export async function POST(request: NextRequest) {
 }
 
 export async function GET() {
-  return NextResponse.json(incidents);
+  const sorted = [...incidents].reverse();
+  return NextResponse.json(sorted);
 }
