@@ -2,12 +2,14 @@
 
 import { useEffect, useState, useCallback } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import {
   ArrowLeft,
   RefreshCw,
   AlertTriangle,
   Filter,
   Trash2,
+  LogOut,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -75,6 +77,14 @@ export default function AdminPage() {
   const [filterStatus, setFilterStatus] = useState<string>("all");
   const [selectedIncident, setSelectedIncident] =
     useState<IncidentReport | null>(null);
+
+  const router = useRouter();
+
+  const handleLogout = async () => {
+    await fetch("/api/auth", { method: "DELETE" });
+    router.push("/admin/login");
+    router.refresh();
+  };
 
   const fetchIncidents = useCallback(async () => {
     setLoading(true);
@@ -173,18 +183,29 @@ export default function AdminPage() {
               </p>
             </div>
           </div>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={fetchIncidents}
-            disabled={loading}
-          >
-            <RefreshCw
-              size={14}
-              className={`mr-2 ${loading ? "animate-spin" : ""}`}
-            />
-            Refresh
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={fetchIncidents}
+              disabled={loading}
+            >
+              <RefreshCw
+                size={14}
+                className={`mr-2 ${loading ? "animate-spin" : ""}`}
+              />
+              Refresh
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={handleLogout}
+              className="text-muted-foreground hover:text-red-400"
+            >
+              <LogOut size={14} className="mr-2" />
+              Logout
+            </Button>
+          </div>
         </div>
       </header>
 
