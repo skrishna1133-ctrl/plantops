@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { incidentReportSchema } from "@/lib/schemas";
-import { incidents } from "@/lib/store";
+import { dbIncidents } from "@/lib/db";
 import { v4 as uuidv4 } from "uuid";
 
 function generateTicketId(): string {
@@ -49,7 +49,7 @@ export async function POST(request: NextRequest) {
       createdAt: new Date().toISOString(),
     };
 
-    incidents.push(incident);
+    await dbIncidents.create(incident);
 
     return NextResponse.json(
       { ticketId: incident.ticketId, id: incident.id },
@@ -65,6 +65,14 @@ export async function POST(request: NextRequest) {
 }
 
 export async function GET() {
-  const sorted = [...incidents].reverse();
-  return NextResponse.json(sorted);
+  try {
+    const sorted = await dbIncidents.getAll();
+    return NextResponse.json(sorted);
+  } catch (error) {
+    console.error("Error fetching incidents:", error);
+    return NextResponse.json(
+      { error: "Internal server error" },
+      { status: 500 }
+    );
+  }
 }

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { checklistTemplates } from "@/lib/store";
+import { dbTemplates } from "@/lib/db";
 
 export async function PATCH(
   request: NextRequest,
@@ -8,18 +8,22 @@ export async function PATCH(
   try {
     const { id } = await params;
     const body = await request.json();
-    const template = checklistTemplates.find((t) => t.id === id);
 
-    if (!template) {
-      return NextResponse.json({ error: "Template not found" }, { status: 404 });
+    if (body.active !== undefined) {
+      const updated = await dbTemplates.update(id, { active: body.active });
+      if (!updated) {
+        return NextResponse.json({ error: "Template not found" }, { status: 404 });
+      }
     }
 
-    if (body.title !== undefined) template.title = body.title;
-    if (body.type !== undefined) template.type = body.type;
-    if (body.description !== undefined) template.description = body.description;
-    if (body.items !== undefined) template.items = body.items;
-    if (body.active !== undefined) template.active = body.active;
+    if (body.title !== undefined) {
+      const updated = await dbTemplates.update(id, { title: body.title });
+      if (!updated) {
+        return NextResponse.json({ error: "Template not found" }, { status: 404 });
+      }
+    }
 
+    const template = await dbTemplates.getById(id);
     return NextResponse.json(template);
   } catch (error) {
     console.error("Error updating template:", error);
@@ -31,13 +35,17 @@ export async function DELETE(
   _request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const { id } = await params;
-  const index = checklistTemplates.findIndex((t) => t.id === id);
+  try {
+    const { id } = await params;
+    const deleted = await dbTemplates.delete(id);
 
-  if (index === -1) {
-    return NextResponse.json({ error: "Template not found" }, { status: 404 });
+    if (!deleted) {
+      return NextResponse.json({ error: "Template not found" }, { status: 404 });
+    }
+
+    return NextResponse.json({ success: true });
+  } catch (error) {
+    console.error("Error deleting template:", error);
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
-
-  checklistTemplates.splice(index, 1);
-  return NextResponse.json({ success: true });
 }

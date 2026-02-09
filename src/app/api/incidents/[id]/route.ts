@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { incidents } from "@/lib/store";
+import { dbIncidents } from "@/lib/db";
 
 export async function PATCH(
   request: NextRequest,
@@ -17,17 +17,15 @@ export async function PATCH(
       );
     }
 
-    const incident = incidents.find((inc) => inc.id === id);
-    if (!incident) {
+    const updated = await dbIncidents.update(id, { status });
+    if (!updated) {
       return NextResponse.json(
         { error: "Incident not found" },
         { status: 404 }
       );
     }
 
-    incident.status = status;
-
-    return NextResponse.json(incident);
+    return NextResponse.json({ success: true, status });
   } catch (error) {
     console.error("Error updating incident:", error);
     return NextResponse.json(
@@ -38,21 +36,19 @@ export async function PATCH(
 }
 
 export async function DELETE(
-  request: NextRequest,
+  _request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const { id } = await params;
-    const index = incidents.findIndex((inc) => inc.id === id);
+    const deleted = await dbIncidents.delete(id);
 
-    if (index === -1) {
+    if (!deleted) {
       return NextResponse.json(
         { error: "Incident not found" },
         { status: 404 }
       );
     }
-
-    incidents.splice(index, 1);
 
     return NextResponse.json({ success: true });
   } catch (error) {

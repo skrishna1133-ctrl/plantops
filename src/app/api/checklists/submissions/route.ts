@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { checklistTemplates, checklistSubmissions } from "@/lib/store";
+import { dbTemplates, dbSubmissions } from "@/lib/db";
 import { v4 as uuidv4 } from "uuid";
 import type { ChecklistSubmission, ItemResponse } from "@/lib/schemas";
 
@@ -11,15 +11,17 @@ function generateSubmissionId(): string {
 }
 
 export async function GET(request: NextRequest) {
-  const { searchParams } = new URL(request.url);
-  const type = searchParams.get("type");
-  const shift = searchParams.get("shift");
+  try {
+    const { searchParams } = new URL(request.url);
+    const type = searchParams.get("type") || undefined;
+    const shift = searchParams.get("shift") || undefined;
 
-  let filtered = [...checklistSubmissions];
-  if (type) filtered = filtered.filter((s) => s.templateType === type);
-  if (shift) filtered = filtered.filter((s) => s.shift === shift);
-
-  return NextResponse.json(filtered.reverse());
+    const submissions = await dbSubmissions.getAll({ type, shift });
+    return NextResponse.json(submissions);
+  } catch (error) {
+    console.error("Error fetching submissions:", error);
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
+  }
 }
 
 export async function POST(request: NextRequest) {
@@ -40,7 +42,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Responses are required" }, { status: 400 });
     }
 
-    const template = checklistTemplates.find((t) => t.id === templateId);
+    const template = await dbTemplates.getById(templateId);
     if (!template) {
       return NextResponse.json({ error: "Template not found" }, { status: 404 });
     }
@@ -72,7 +74,7 @@ export async function POST(request: NextRequest) {
       submittedAt: new Date().toISOString(),
     };
 
-    checklistSubmissions.push(submission);
+    await dbSubmissions.create(submission);
 
     return NextResponse.json(
       { submissionId: submission.submissionId, id: submission.id },

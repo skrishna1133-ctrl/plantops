@@ -1,17 +1,21 @@
 import { NextRequest, NextResponse } from "next/server";
-import { checklistSubmissions } from "@/lib/store";
+import { dbSubmissions } from "@/lib/db";
 
 export async function DELETE(
   _request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const { id } = await params;
-  const index = checklistSubmissions.findIndex((s) => s.id === id);
+  try {
+    const { id } = await params;
+    const deleted = await dbSubmissions.delete(id);
 
-  if (index === -1) {
-    return NextResponse.json({ error: "Submission not found" }, { status: 404 });
+    if (!deleted) {
+      return NextResponse.json({ error: "Submission not found" }, { status: 404 });
+    }
+
+    return NextResponse.json({ success: true });
+  } catch (error) {
+    console.error("Error deleting submission:", error);
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
-
-  checklistSubmissions.splice(index, 1);
-  return NextResponse.json({ success: true });
 }

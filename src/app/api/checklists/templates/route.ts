@@ -1,22 +1,22 @@
 import { NextRequest, NextResponse } from "next/server";
-import { checklistTemplates } from "@/lib/store";
+import { dbTemplates } from "@/lib/db";
 import { v4 as uuidv4 } from "uuid";
 import type { ChecklistTemplate, TemplateItem } from "@/lib/schemas";
 
 export async function GET(request: NextRequest) {
-  const { searchParams } = new URL(request.url);
-  const type = searchParams.get("type");
-  const activeOnly = searchParams.get("active") !== "false";
+  try {
+    const { searchParams } = new URL(request.url);
+    const type = searchParams.get("type") || undefined;
+    const activeParam = searchParams.get("active");
+    const active = activeParam === "false" ? undefined : true;
 
-  let filtered = [...checklistTemplates];
-  if (activeOnly) {
-    filtered = filtered.filter((t) => t.active);
-  }
-  if (type) {
-    filtered = filtered.filter((t) => t.type === type);
-  }
+    const templates = await dbTemplates.getAll({ type, active });
 
-  return NextResponse.json(filtered.reverse());
+    return NextResponse.json(templates);
+  } catch (error) {
+    console.error("Error fetching templates:", error);
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
+  }
 }
 
 export async function POST(request: NextRequest) {
@@ -47,7 +47,7 @@ export async function POST(request: NextRequest) {
       createdAt: new Date().toISOString(),
     };
 
-    checklistTemplates.push(template);
+    await dbTemplates.create(template);
 
     return NextResponse.json(template, { status: 201 });
   } catch (error) {
