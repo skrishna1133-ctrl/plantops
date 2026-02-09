@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { Trash2, Loader2, Eye } from "lucide-react";
+import { Trash2, Loader2, Eye, AlertCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -26,6 +26,19 @@ import {
 } from "@/lib/schemas";
 import SubmissionDetailDialog from "./submission-detail-dialog";
 
+function getFlags(sub: ChecklistSubmission): string[] {
+  const flags: string[] = [];
+  for (const r of sub.responses) {
+    if (r.itemType === "checkbox" && r.checkboxValue === false) {
+      flags.push(`${r.itemTitle}: Not checked`);
+    }
+    if (r.itemType === "pass_fail" && r.passFail === "fail") {
+      flags.push(`${r.itemTitle}: Failed`);
+    }
+  }
+  return flags;
+}
+
 export default function ChecklistSubmissionsTab() {
   const [submissions, setSubmissions] = useState<ChecklistSubmission[]>([]);
   const [loading, setLoading] = useState(true);
@@ -34,6 +47,7 @@ export default function ChecklistSubmissionsTab() {
   const [selectedSubmission, setSelectedSubmission] =
     useState<ChecklistSubmission | null>(null);
   const [detailOpen, setDetailOpen] = useState(false);
+  const [filterFlags, setFilterFlags] = useState<string>("all");
   const [deletingId, setDeletingId] = useState<string | null>(null);
 
   const fetchSubmissions = useCallback(async () => {
@@ -73,6 +87,12 @@ export default function ChecklistSubmissionsTab() {
     setDetailOpen(true);
   };
 
+  const displayedSubmissions = submissions.filter((s) => {
+    if (filterFlags === "all") return true;
+    const hasFlags = getFlags(s).length > 0;
+    return filterFlags === "flagged" ? hasFlags : !hasFlags;
+  });
+
   return (
     <div className="space-y-4">
       <div className="flex items-center gap-3">
@@ -99,14 +119,24 @@ export default function ChecklistSubmissionsTab() {
             <SelectItem value="night">Night</SelectItem>
           </SelectContent>
         </Select>
-        <Badge variant="secondary">{submissions.length} submissions</Badge>
+        <Select value={filterFlags} onValueChange={setFilterFlags}>
+          <SelectTrigger className="w-40">
+            <SelectValue placeholder="Flags" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All</SelectItem>
+            <SelectItem value="flagged">Flagged Only</SelectItem>
+            <SelectItem value="clean">Clean Only</SelectItem>
+          </SelectContent>
+        </Select>
+        <Badge variant="secondary">{displayedSubmissions.length} submissions</Badge>
       </div>
 
       {loading ? (
         <div className="flex justify-center py-12">
           <Loader2 className="animate-spin text-muted-foreground" size={24} />
         </div>
-      ) : submissions.length === 0 ? (
+      ) : displayedSubmissions.length === 0 ? (
         <div className="text-center py-12 text-muted-foreground">
           <p>No submissions yet.</p>
         </div>
@@ -121,12 +151,15 @@ export default function ChecklistSubmissionsTab() {
                 <TableHead>Person</TableHead>
                 <TableHead>Shift</TableHead>
                 <TableHead>Submitted</TableHead>
+                <TableHead className="text-center">Flags</TableHead>
                 <TableHead className="text-right">Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {submissions.map((s) => (
-                <TableRow key={s.id}>
+              {displayedSubmissions.map((s) => {
+                const flags = getFlags(s);
+                return (
+                <TableRow key={s.id} className={flags.length > 0 ? "bg-red-500/5" : ""}>
                   <TableCell className="font-mono text-xs">
                     {s.submissionId}
                   </TableCell>
@@ -146,6 +179,16 @@ export default function ChecklistSubmissionsTab() {
                   </TableCell>
                   <TableCell className="text-sm text-muted-foreground">
                     {new Date(s.submittedAt).toLocaleString()}
+                  </TableCell>
+                  <TableCell className="text-center">
+                    {flags.length > 0 ? (
+                      <div className="flex items-center justify-center gap-1" title={flags.join("\n")}>
+                        <AlertCircle size={16} className="text-red-500" />
+                        <span className="text-xs font-medium text-red-500">{flags.length}</span>
+                      </div>
+                    ) : (
+                      <span className="text-xs text-muted-foreground">—</span>
+                    )}
                   </TableCell>
                   <TableCell className="text-right">
                     <div className="flex items-center justify-end gap-1">
@@ -173,7 +216,8 @@ export default function ChecklistSubmissionsTab() {
                     </div>
                   </TableCell>
                 </TableRow>
-              ))}
+                );
+              })}
             </TableBody>
           </Table>
         </div>
