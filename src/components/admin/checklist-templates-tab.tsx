@@ -39,6 +39,7 @@ export default function ChecklistTemplatesTab() {
     try {
       const params = new URLSearchParams();
       if (filterType !== "all") params.set("type", filterType);
+      params.set("active", "false");
       const res = await fetch(`/api/checklists/templates?${params}`);
       const data = await res.json();
       setTemplates(data);
