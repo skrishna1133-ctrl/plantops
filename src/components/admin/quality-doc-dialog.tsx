@@ -147,7 +147,7 @@ export default function QualityDocDialog({
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="rowCount">Number of Drums</Label>
+              <Label htmlFor="rowCount">Number of Gaylords</Label>
               <Input
                 id="rowCount"
                 type="number"

@@ -178,7 +178,7 @@ export default function FillQualityPage() {
             <div className="flex flex-wrap gap-2 text-xs text-muted-foreground">
               <span>Customer PO: {doc.customerPo}</span>
               <span>Tare: {doc.tareWeight} lbs</span>
-              <Badge variant="outline" className="text-[10px]">{doc.rowCount} drums</Badge>
+              <Badge variant="outline" className="text-[10px]">{doc.rowCount} gaylords</Badge>
             </div>
           </CardHeader>
           <CardContent className="space-y-4">
@@ -198,7 +198,7 @@ export default function FillQualityPage() {
               {rows.map((r) => (
                 <div key={r.serialNumber} className="p-4 border rounded-lg space-y-3">
                   <div className="flex items-center justify-between">
-                    <span className="font-semibold text-sm">Drum #{r.serialNumber}</span>
+                    <span className="font-semibold text-sm">Gaylord #{r.serialNumber}</span>
                   </div>
                   <div className="grid grid-cols-2 gap-3">
                     <div className="space-y-1">

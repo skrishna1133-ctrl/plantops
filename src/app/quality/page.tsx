@@ -93,7 +93,7 @@ export default function QualityPage() {
                                 {statusLabels[d.status]}
                               </Badge>
                               <Badge variant="outline" className="text-[10px]">
-                                {d.rowCount} drums
+                                {d.rowCount} gaylords
                               </Badge>
                             </div>
                           </div>

@@ -1,7 +1,7 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
-import { Loader2, Camera, X, CheckCircle2 } from "lucide-react";
+import { useState, useEffect } from "react";
+import { Loader2, CheckCircle2, Download } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -20,6 +20,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import type { QualityDocument, QualityDocRow } from "@/lib/schemas";
+import PhotoCapture from "@/components/photo-capture";
 
 const statusLabels: Record<string, string> = {
   draft: "Draft",
@@ -40,6 +41,10 @@ interface QualityDocDetailDialogProps {
   onUpdated: () => void;
 }
 
+function getDocTitle(doc: QualityDocument): string {
+  return `Metal Contamination and Bulk Density Data for ${doc.materialCode} on ${new Date(doc.createdAt).toLocaleDateString()}`;
+}
+
 export default function QualityDocDetailDialog({
   doc,
   open,
@@ -48,7 +53,7 @@ export default function QualityDocDetailDialog({
 }: QualityDocDetailDialogProps) {
   const [rows, setRows] = useState<QualityDocRow[]>([]);
   const [saving, setSaving] = useState(false);
-  const fileInputRefs = useRef<Record<number, HTMLInputElement | null>>({});
+  const [exporting, setExporting] = useState(false);
 
   useEffect(() => {
     if (doc) setRows([...doc.rows]);
@@ -56,7 +61,7 @@ export default function QualityDocDetailDialog({
 
   if (!doc) return null;
 
-  const docTitle = `Metal Contamination and Bulk Density Data for ${doc.materialCode} on ${new Date(doc.createdAt).toLocaleDateString()}`;
+  const docTitle = getDocTitle(doc);
 
   const updateRow = (serialNumber: number, field: keyof QualityDocRow, value: number | string | undefined) => {
     setRows((prev) =>
@@ -89,22 +94,10 @@ export default function QualityDocDetailDialog({
     );
   };
 
-  const handlePhotoUpload = (serialNumber: number, file: File) => {
-    const reader = new FileReader();
-    reader.onloadend = () => {
-      setRows((prev) =>
-        prev.map((r) =>
-          r.serialNumber === serialNumber ? { ...r, photoUrl: reader.result as string } : r
-        )
-      );
-    };
-    reader.readAsDataURL(file);
-  };
-
-  const removePhoto = (serialNumber: number) => {
+  const updatePhoto = (serialNumber: number, url: string | undefined) => {
     setRows((prev) =>
       prev.map((r) =>
-        r.serialNumber === serialNumber ? { ...r, photoUrl: undefined } : r
+        r.serialNumber === serialNumber ? { ...r, photoUrl: url } : r
       )
     );
   };
@@ -139,6 +132,77 @@ export default function QualityDocDetailDialog({
       console.error("Error completing:", error);
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleExportPdf = async () => {
+    setExporting(true);
+    try {
+      const jspdfModule = await import("jspdf");
+      const jsPDF = jspdfModule.default;
+      const { default: autoTable } = await import("jspdf-autotable");
+
+      const pdf = new jsPDF({ orientation: "landscape" });
+
+      // Title
+      pdf.setFontSize(14);
+      pdf.text(docTitle, 14, 20);
+
+      // Header info
+      pdf.setFontSize(10);
+      pdf.text(`PO Number: ${doc.poNumber}`, 14, 30);
+      pdf.text(`Customer: ${doc.customerName}`, 14, 36);
+      pdf.text(`Customer PO: ${doc.customerPo}`, 14, 42);
+      pdf.text(`Tare Weight: ${doc.tareWeight} lbs`, 14, 48);
+      pdf.text(`Filled by: ${doc.personName || "—"}`, 14, 54);
+      pdf.text(`Date: ${new Date(doc.createdAt).toLocaleDateString()}`, 14, 60);
+
+      // Table
+      const tableData = rows.map((r) => [
+        r.serialNumber,
+        r.grossWeight?.toFixed(2) ?? "—",
+        r.netWeight?.toFixed(2) ?? "—",
+        r.bulkDensityGcc?.toFixed(4) ?? "—",
+        r.bulkDensityLbcc?.toFixed(6) ?? "—",
+        r.metalContamGrams?.toFixed(4) ?? "—",
+        r.metalContamPct !== undefined ? (r.metalContamPct * 100).toFixed(6) + "%" : "—",
+      ]);
+
+      autoTable(pdf, {
+        startY: 66,
+        head: [["#", "Gross Wt (lbs)", "Net Wt (lbs)", "Bulk Density (g/cc)", "Bulk Density (lb/cc)", "Metal Contam (g)", "% Metal Contam"]],
+        body: tableData,
+        styles: { fontSize: 9 },
+        headStyles: { fillColor: [249, 115, 22] },
+      });
+
+      // Average
+      if (avgMetalContamPct !== undefined) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const finalY = (pdf as any).lastAutoTable?.finalY || 120;
+        pdf.setFontSize(11);
+        pdf.text(`Average % Metal Contamination: ${(avgMetalContamPct * 100).toFixed(6)}%`, 14, finalY + 10);
+      }
+
+      // Photos on subsequent pages
+      const rowsWithPhotos = rows.filter((r) => r.photoUrl);
+      for (const r of rowsWithPhotos) {
+        pdf.addPage();
+        pdf.setFontSize(12);
+        pdf.text(`Metal Contamination - Gaylord #${r.serialNumber}`, 14, 20);
+        try {
+          pdf.addImage(r.photoUrl!, "JPEG", 14, 30, 260, 160);
+        } catch {
+          pdf.text("(Photo could not be embedded)", 14, 40);
+        }
+      }
+
+      const filename = docTitle.replace(/[^a-zA-Z0-9 ]/g, "").replace(/\s+/g, "_") + ".pdf";
+      pdf.save(filename);
+    } catch (error) {
+      console.error("Error exporting PDF:", error);
+    } finally {
+      setExporting(false);
     }
   };
 
@@ -213,43 +277,11 @@ export default function QualityDocDetailDialog({
                     {r.metalContamPct !== undefined ? (r.metalContamPct * 100).toFixed(6) + "%" : "—"}
                   </TableCell>
                   <TableCell>
-                    <input
-                      ref={(el) => { fileInputRefs.current[r.serialNumber] = el; }}
-                      type="file"
-                      accept="image/*"
-                      className="hidden"
-                      onChange={(e) => {
-                        const file = e.target.files?.[0];
-                        if (file) handlePhotoUpload(r.serialNumber, file);
-                      }}
+                    <PhotoCapture
+                      photoUrl={r.photoUrl}
+                      onPhotoChange={(url) => updatePhoto(r.serialNumber, url)}
+                      label="Photo"
                     />
-                    {r.photoUrl ? (
-                      <div className="relative w-16 h-16">
-                        <img
-                          src={r.photoUrl}
-                          alt={`Metal contamination #${r.serialNumber}`}
-                          className="w-16 h-16 object-cover rounded border border-border"
-                        />
-                        <button
-                          type="button"
-                          onClick={() => removePhoto(r.serialNumber)}
-                          className="absolute -top-1 -right-1 bg-black/60 text-white rounded-full p-0.5 hover:bg-black/80"
-                        >
-                          <X size={10} />
-                        </button>
-                      </div>
-                    ) : (
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        className="h-8 text-xs"
-                        onClick={() => fileInputRefs.current[r.serialNumber]?.click()}
-                      >
-                        <Camera size={12} className="mr-1" />
-                        Photo
-                      </Button>
-                    )}
                   </TableCell>
                 </TableRow>
               ))}
@@ -264,6 +296,12 @@ export default function QualityDocDetailDialog({
         )}
 
         <div className="flex items-center justify-end gap-2">
+          {doc.status === "complete" && (
+            <Button variant="outline" onClick={handleExportPdf} disabled={exporting}>
+              {exporting ? <Loader2 size={14} className="mr-2 animate-spin" /> : <Download size={14} className="mr-2" />}
+              Export PDF
+            </Button>
+          )}
           {(doc.status === "worker_filled" || doc.status === "complete") && (
             <Button variant="outline" onClick={handleSave} disabled={saving}>
               {saving ? <Loader2 size={14} className="mr-2 animate-spin" /> : null}

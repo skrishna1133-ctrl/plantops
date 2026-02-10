@@ -120,7 +120,7 @@ export default function QualityDocumentsTab() {
                 <TableHead>PO Number</TableHead>
                 <TableHead>Material</TableHead>
                 <TableHead>Customer</TableHead>
-                <TableHead className="text-center">Drums</TableHead>
+                <TableHead className="text-center">Gaylords</TableHead>
                 <TableHead className="text-center">Status</TableHead>
                 <TableHead>Created</TableHead>
                 <TableHead className="text-right">Actions</TableHead>
