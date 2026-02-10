@@ -4,6 +4,8 @@ import type {
   ChecklistTemplate,
   ChecklistSubmission,
   QualityDocument,
+  User,
+  UserRole,
 } from "./schemas";
 import { getFlags } from "./flags";
 
@@ -54,6 +56,19 @@ async function initTables() {
       responses JSONB NOT NULL DEFAULT '[]',
       notes TEXT,
       submitted_at VARCHAR(50) NOT NULL
+    )
+  `;
+
+  await sql`
+    CREATE TABLE IF NOT EXISTS users (
+      id UUID PRIMARY KEY,
+      username VARCHAR(50) NOT NULL UNIQUE,
+      password_hash TEXT NOT NULL,
+      full_name VARCHAR(100) NOT NULL,
+      role VARCHAR(20) NOT NULL,
+      active BOOLEAN DEFAULT true,
+      created_at VARCHAR(50) NOT NULL,
+      updated_at VARCHAR(50) NOT NULL
     )
   `;
 
@@ -382,6 +397,86 @@ export const dbQualityDocs = {
     return (rowCount ?? 0) > 0;
   },
 };
+
+// ─── Users ───
+
+export const dbUsers = {
+  async getAll(): Promise<User[]> {
+    await initTables();
+    const { rows } = await sql`
+      SELECT id, username, full_name, role, active, created_at, updated_at FROM users ORDER BY created_at DESC
+    `;
+    return rows.map(mapUser);
+  },
+
+  async getByUsername(username: string): Promise<(User & { passwordHash: string }) | null> {
+    await initTables();
+    const { rows } = await sql`
+      SELECT * FROM users WHERE username = ${username} AND active = true
+    `;
+    if (rows.length === 0) return null;
+    const row = rows[0];
+    return { ...mapUser(row), passwordHash: row.password_hash as string };
+  },
+
+  async getById(id: string): Promise<User | null> {
+    await initTables();
+    const { rows } = await sql`
+      SELECT id, username, full_name, role, active, created_at, updated_at FROM users WHERE id = ${id}
+    `;
+    return rows.length > 0 ? mapUser(rows[0]) : null;
+  },
+
+  async create(user: User & { passwordHash: string }): Promise<void> {
+    await initTables();
+    await sql`
+      INSERT INTO users (id, username, password_hash, full_name, role, active, created_at, updated_at)
+      VALUES (${user.id}, ${user.username}, ${user.passwordHash}, ${user.fullName}, ${user.role}, ${user.active}, ${user.createdAt}, ${user.updatedAt})
+    `;
+  },
+
+  async update(id: string, data: { fullName?: string; role?: UserRole; active?: boolean; passwordHash?: string }): Promise<boolean> {
+    await initTables();
+    const now = new Date().toISOString();
+    const user = await this.getById(id);
+    if (!user) return false;
+
+    const fullName = data.fullName ?? user.fullName;
+    const role = data.role ?? user.role;
+    const active = data.active ?? user.active;
+
+    if (data.passwordHash) {
+      const { rowCount } = await sql`
+        UPDATE users SET full_name = ${fullName}, role = ${role}, active = ${active}, password_hash = ${data.passwordHash}, updated_at = ${now} WHERE id = ${id}
+      `;
+      return (rowCount ?? 0) > 0;
+    }
+    const { rowCount } = await sql`
+      UPDATE users SET full_name = ${fullName}, role = ${role}, active = ${active}, updated_at = ${now} WHERE id = ${id}
+    `;
+    return (rowCount ?? 0) > 0;
+  },
+
+  async delete(id: string): Promise<boolean> {
+    await initTables();
+    const { rowCount } = await sql`
+      DELETE FROM users WHERE id = ${id}
+    `;
+    return (rowCount ?? 0) > 0;
+  },
+};
+
+function mapUser(row: Record<string, unknown>): User {
+  return {
+    id: row.id as string,
+    username: row.username as string,
+    fullName: row.full_name as string,
+    role: row.role as UserRole,
+    active: row.active as boolean,
+    createdAt: row.created_at as string,
+    updatedAt: row.updated_at as string,
+  };
+}
 
 function mapQualityDoc(row: Record<string, unknown>): QualityDocument {
   return {

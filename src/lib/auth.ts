@@ -1,3 +1,5 @@
+import type { UserRole } from "./schemas";
+
 const SESSION_SECRET =
   process.env.SESSION_SECRET || "plantops-default-secret-change-in-prod";
 
@@ -20,21 +22,74 @@ async function hmacSign(message: string, secret: string): Promise<string> {
     .join("");
 }
 
-export async function createSessionToken(): Promise<string> {
-  const payload = `admin:${Date.now()}`;
-  const payloadB64 = btoa(payload);
-  const signature = await hmacSign(payload, SESSION_SECRET);
+// ─── Session Tokens ───
+
+export interface SessionPayload {
+  userId: string;
+  role: UserRole;
+}
+
+export async function createSessionToken(payload: SessionPayload): Promise<string> {
+  const raw = `${payload.userId}:${payload.role}:${Date.now()}`;
+  const payloadB64 = btoa(raw);
+  const signature = await hmacSign(raw, SESSION_SECRET);
   return `${payloadB64}.${signature}`;
 }
 
-export async function verifySessionToken(token: string): Promise<boolean> {
+export async function verifySessionToken(token: string): Promise<SessionPayload | null> {
   try {
     const [payloadB64, signature] = token.split(".");
-    if (!payloadB64 || !signature) return false;
-    const payload = atob(payloadB64);
-    const expected = await hmacSign(payload, SESSION_SECRET);
-    return expected === signature;
+    if (!payloadB64 || !signature) return null;
+    const raw = atob(payloadB64);
+    const expected = await hmacSign(raw, SESSION_SECRET);
+    if (expected !== signature) return null;
+
+    const parts = raw.split(":");
+    if (parts.length < 3) return null;
+    return { userId: parts[0], role: parts[1] as UserRole };
   } catch {
-    return false;
+    return null;
   }
+}
+
+// ─── Password Hashing (PBKDF2, edge-compatible) ───
+
+export async function hashPassword(password: string): Promise<string> {
+  const encoder = new TextEncoder();
+  const salt = crypto.getRandomValues(new Uint8Array(16));
+  const key = await crypto.subtle.importKey(
+    "raw",
+    encoder.encode(password),
+    { name: "PBKDF2" },
+    false,
+    ["deriveBits"]
+  );
+  const derived = await crypto.subtle.deriveBits(
+    { name: "PBKDF2", salt, iterations: 100000, hash: "SHA-256" },
+    key,
+    256
+  );
+  const saltHex = Array.from(salt).map((b) => b.toString(16).padStart(2, "0")).join("");
+  const hashHex = Array.from(new Uint8Array(derived)).map((b) => b.toString(16).padStart(2, "0")).join("");
+  return `${saltHex}:${hashHex}`;
+}
+
+export async function verifyPassword(password: string, hash: string): Promise<boolean> {
+  const [saltHex, hashHex] = hash.split(":");
+  const salt = new Uint8Array(saltHex.match(/.{2}/g)!.map((byte) => parseInt(byte, 16)));
+  const encoder = new TextEncoder();
+  const key = await crypto.subtle.importKey(
+    "raw",
+    encoder.encode(password),
+    { name: "PBKDF2" },
+    false,
+    ["deriveBits"]
+  );
+  const derived = await crypto.subtle.deriveBits(
+    { name: "PBKDF2", salt, iterations: 100000, hash: "SHA-256" },
+    key,
+    256
+  );
+  const newHashHex = Array.from(new Uint8Array(derived)).map((b) => b.toString(16).padStart(2, "0")).join("");
+  return newHashHex === hashHex;
 }

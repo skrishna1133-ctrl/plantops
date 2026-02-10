@@ -16,6 +16,7 @@ import {
   FileCheck,
   BarChart3,
   FlaskConical,
+  Users,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -48,6 +49,7 @@ import ChecklistTemplatesTab from "@/components/admin/checklist-templates-tab";
 import ChecklistSubmissionsTab from "@/components/admin/checklist-submissions-tab";
 import ChecklistReportsTab from "@/components/admin/checklist-reports-tab";
 import QualityDocumentsTab from "@/components/admin/quality-documents-tab";
+import UsersTab from "@/components/admin/users-tab";
 import { ThemeToggle } from "@/components/theme-toggle";
 
 const criticalityColors: Record<string, string> = {
@@ -80,7 +82,7 @@ const plantLabels: Record<string, string> = {
   "plant-b": "Plant B",
 };
 
-type AdminTab = "incidents" | "templates" | "submissions" | "reports" | "quality";
+type AdminTab = "incidents" | "templates" | "submissions" | "reports" | "quality" | "users";
 
 export default function AdminPage() {
   const [activeTab, setActiveTab] = useState<AdminTab>("incidents");
@@ -97,7 +99,7 @@ export default function AdminPage() {
 
   const handleLogout = async () => {
     await fetch("/api/auth", { method: "DELETE" });
-    router.push("/admin/login");
+    router.push("/login");
     router.refresh();
   };
 
@@ -237,6 +239,7 @@ export default function AdminPage() {
               { id: "submissions" as AdminTab, label: "Submissions", icon: FileCheck },
               { id: "reports" as AdminTab, label: "Reports", icon: BarChart3 },
               { id: "quality" as AdminTab, label: "Quality", icon: FlaskConical },
+              { id: "users" as AdminTab, label: "Users", icon: Users },
             ]).map((tab) => (
               <button
                 key={tab.id}
@@ -267,6 +270,9 @@ export default function AdminPage() {
 
         {/* Quality Tab */}
         {activeTab === "quality" && <QualityDocumentsTab />}
+
+        {/* Users Tab */}
+        {activeTab === "users" && <UsersTab />}
 
         {/* Incidents Tab */}
         {activeTab === "incidents" && <>

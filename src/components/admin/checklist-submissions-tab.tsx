@@ -27,7 +27,7 @@ import {
 import { getFlags } from "@/lib/flags";
 import SubmissionDetailDialog from "./submission-detail-dialog";
 
-export default function ChecklistSubmissionsTab() {
+export default function ChecklistSubmissionsTab({ readOnly = false }: { readOnly?: boolean }) {
   const [submissions, setSubmissions] = useState<ChecklistSubmission[]>([]);
   const [loading, setLoading] = useState(true);
   const [filterType, setFilterType] = useState<string>("all");
@@ -188,19 +188,21 @@ export default function ChecklistSubmissionsTab() {
                       >
                         <Eye size={14} />
                       </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-8 w-8 text-red-400 hover:text-red-300"
-                        onClick={() => deleteSubmission(s.id)}
-                        disabled={deletingId === s.id}
-                      >
-                        {deletingId === s.id ? (
-                          <Loader2 size={14} className="animate-spin" />
-                        ) : (
-                          <Trash2 size={14} />
-                        )}
-                      </Button>
+                      {!readOnly && (
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8 text-red-400 hover:text-red-300"
+                          onClick={() => deleteSubmission(s.id)}
+                          disabled={deletingId === s.id}
+                        >
+                          {deletingId === s.id ? (
+                            <Loader2 size={14} className="animate-spin" />
+                          ) : (
+                            <Trash2 size={14} />
+                          )}
+                        </Button>
+                      )}
                     </div>
                   </TableCell>
                 </TableRow>

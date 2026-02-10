@@ -1,9 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { AlertTriangle, Wrench, ClipboardCheck, Package, Clock, FileText, Shield, FileCheck } from "lucide-react";
+import { AlertTriangle, Wrench, ClipboardCheck, Package, Clock, FileText, Shield, FileCheck, LogIn, FlaskConical, Eye } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import IncidentReportDialog from "@/components/incident-report-dialog";
@@ -75,9 +75,29 @@ const tools = [
   },
 ];
 
+const roleDashboards: Record<string, { href: string; label: string; icon: typeof Shield }> = {
+  admin: { href: "/admin", label: "Admin", icon: Shield },
+  owner: { href: "/admin", label: "Admin", icon: Shield },
+  lab_tech: { href: "/lab", label: "Lab", icon: FlaskConical },
+  engineer: { href: "/view", label: "View", icon: Eye },
+};
+
 export default function Home() {
   const router = useRouter();
   const [incidentDialogOpen, setIncidentDialogOpen] = useState(false);
+  const [userRole, setUserRole] = useState<string | null>(null);
+
+  useEffect(() => {
+    fetch("/api/auth")
+      .then((res) => {
+        if (res.ok) return res.json();
+        return null;
+      })
+      .then((data) => {
+        if (data?.authenticated) setUserRole(data.role);
+      })
+      .catch(() => {});
+  }, []);
 
   const handleToolClick = (toolId: string) => {
     if (toolId === "incident-report") {
@@ -105,12 +125,25 @@ export default function Home() {
           </div>
           <div className="flex items-center gap-1">
             <ThemeToggle />
-            <Link href="/admin">
-              <Button variant="outline" size="sm">
-                <Shield size={14} className="mr-2" />
-                Admin
-              </Button>
-            </Link>
+            {userRole && roleDashboards[userRole] ? (() => {
+              const dash = roleDashboards[userRole];
+              const DashIcon = dash.icon;
+              return (
+                <Link href={dash.href}>
+                  <Button variant="outline" size="sm">
+                    <DashIcon size={14} className="mr-2" />
+                    {dash.label}
+                  </Button>
+                </Link>
+              );
+            })() : (
+              <Link href="/login">
+                <Button variant="outline" size="sm">
+                  <LogIn size={14} className="mr-2" />
+                  Login
+                </Button>
+              </Link>
+            )}
           </div>
         </div>
       </header>

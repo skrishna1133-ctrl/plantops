@@ -35,7 +35,7 @@ const statusColors: Record<string, string> = {
   complete: "bg-green-500/20 text-green-400 border-green-500/30",
 };
 
-export default function QualityDocumentsTab() {
+export default function QualityDocumentsTab({ readOnly = false }: { readOnly?: boolean }) {
   const [docs, setDocs] = useState<QualityDocument[]>([]);
   const [loading, setLoading] = useState(true);
   const [filterStatus, setFilterStatus] = useState<string>("all");
@@ -97,10 +97,12 @@ export default function QualityDocumentsTab() {
           </Select>
           <Badge variant="secondary">{docs.length} documents</Badge>
         </div>
-        <Button onClick={() => setCreateOpen(true)}>
-          <Plus size={16} className="mr-1" />
-          New Document
-        </Button>
+        {!readOnly && (
+          <Button onClick={() => setCreateOpen(true)}>
+            <Plus size={16} className="mr-1" />
+            New Document
+          </Button>
+        )}
       </div>
 
       {loading ? (
@@ -153,19 +155,21 @@ export default function QualityDocumentsTab() {
                       >
                         <Eye size={14} />
                       </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-8 w-8 text-red-400 hover:text-red-300"
-                        onClick={() => deleteDoc(d.id)}
-                        disabled={deletingId === d.id}
-                      >
-                        {deletingId === d.id ? (
-                          <Loader2 size={14} className="animate-spin" />
-                        ) : (
-                          <Trash2 size={14} />
-                        )}
-                      </Button>
+                      {!readOnly && (
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8 text-red-400 hover:text-red-300"
+                          onClick={() => deleteDoc(d.id)}
+                          disabled={deletingId === d.id}
+                        >
+                          {deletingId === d.id ? (
+                            <Loader2 size={14} className="animate-spin" />
+                          ) : (
+                            <Trash2 size={14} />
+                          )}
+                        </Button>
+                      )}
                     </div>
                   </TableCell>
                 </TableRow>
@@ -186,6 +190,7 @@ export default function QualityDocumentsTab() {
         open={detailOpen}
         onOpenChange={setDetailOpen}
         onUpdated={fetchDocs}
+        readOnly={readOnly}
       />
     </div>
   );

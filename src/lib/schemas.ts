@@ -136,3 +136,33 @@ export interface QualityDocument {
   createdAt: string;
   updatedAt: string;
 }
+
+// ─── Users ───
+
+export const userRoles = [
+  "worker",
+  "lab_tech",
+  "engineer",
+  "admin",
+  "owner",
+] as const;
+
+export type UserRole = (typeof userRoles)[number];
+
+export const userRoleLabels: Record<UserRole, string> = {
+  worker: "Worker",
+  lab_tech: "Lab Tech",
+  engineer: "Engineer",
+  admin: "Admin",
+  owner: "Owner",
+};
+
+export interface User {
+  id: string;
+  username: string;
+  fullName: string;
+  role: UserRole;
+  active: boolean;
+  createdAt: string;
+  updatedAt: string;
+}

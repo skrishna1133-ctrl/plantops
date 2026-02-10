@@ -39,6 +39,7 @@ interface QualityDocDetailDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onUpdated: () => void;
+  readOnly?: boolean;
 }
 
 function formatDate(iso: string): string {
@@ -55,6 +56,7 @@ export default function QualityDocDetailDialog({
   open,
   onOpenChange,
   onUpdated,
+  readOnly = false,
 }: QualityDocDetailDialogProps) {
   const [rows, setRows] = useState<QualityDocRow[]>([]);
   const [saving, setSaving] = useState(false);
@@ -264,7 +266,9 @@ export default function QualityDocDetailDialog({
                     {r.bulkDensityLbcc !== undefined ? r.bulkDensityLbcc.toFixed(6) : "—"}
                   </TableCell>
                   <TableCell>
-                    {doc.status === "worker_filled" || doc.status === "complete" ? (
+                    {readOnly ? (
+                      r.metalContamGrams !== undefined ? r.metalContamGrams.toFixed(4) : "—"
+                    ) : (doc.status === "worker_filled" || doc.status === "complete") ? (
                       <Input
                         type="number"
                         step="0.0001"
@@ -282,11 +286,17 @@ export default function QualityDocDetailDialog({
                     {r.metalContamPct !== undefined ? (r.metalContamPct * 100).toFixed(6) + "%" : "—"}
                   </TableCell>
                   <TableCell>
-                    <PhotoCapture
-                      photoUrl={r.photoUrl}
-                      onPhotoChange={(url) => updatePhoto(r.serialNumber, url)}
-                      label="Photo"
-                    />
+                    {readOnly ? (
+                      r.photoUrl ? (
+                        <img src={r.photoUrl} alt={`Gaylord #${r.serialNumber}`} className="w-16 h-12 object-cover rounded" />
+                      ) : "—"
+                    ) : (
+                      <PhotoCapture
+                        photoUrl={r.photoUrl}
+                        onPhotoChange={(url) => updatePhoto(r.serialNumber, url)}
+                        label="Photo"
+                      />
+                    )}
                   </TableCell>
                 </TableRow>
               ))}
@@ -300,26 +310,28 @@ export default function QualityDocDetailDialog({
           </div>
         )}
 
-        <div className="flex items-center justify-end gap-2">
-          {doc.status === "complete" && (
-            <Button variant="outline" onClick={handleExportPdf} disabled={exporting}>
-              {exporting ? <Loader2 size={14} className="mr-2 animate-spin" /> : <Download size={14} className="mr-2" />}
-              Export PDF
-            </Button>
-          )}
-          {(doc.status === "worker_filled" || doc.status === "complete") && (
-            <Button variant="outline" onClick={handleSave} disabled={saving}>
-              {saving ? <Loader2 size={14} className="mr-2 animate-spin" /> : null}
-              Save Changes
-            </Button>
-          )}
-          {canComplete && (
-            <Button onClick={handleMarkComplete} disabled={saving}>
-              <CheckCircle2 size={14} className="mr-2" />
-              Mark Complete
-            </Button>
-          )}
-        </div>
+        {!readOnly && (
+          <div className="flex items-center justify-end gap-2">
+            {doc.status === "complete" && (
+              <Button variant="outline" onClick={handleExportPdf} disabled={exporting}>
+                {exporting ? <Loader2 size={14} className="mr-2 animate-spin" /> : <Download size={14} className="mr-2" />}
+                Export PDF
+              </Button>
+            )}
+            {(doc.status === "worker_filled" || doc.status === "complete") && (
+              <Button variant="outline" onClick={handleSave} disabled={saving}>
+                {saving ? <Loader2 size={14} className="mr-2 animate-spin" /> : null}
+                Save Changes
+              </Button>
+            )}
+            {canComplete && (
+              <Button onClick={handleMarkComplete} disabled={saving}>
+                <CheckCircle2 size={14} className="mr-2" />
+                Mark Complete
+              </Button>
+            )}
+          </div>
+        )}
       </DialogContent>
     </Dialog>
   );
