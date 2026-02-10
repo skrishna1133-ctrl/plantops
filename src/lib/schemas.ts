@@ -143,6 +143,7 @@ export const userRoles = [
   "worker",
   "lab_tech",
   "engineer",
+  "shipping",
   "admin",
   "owner",
 ] as const;
@@ -153,6 +154,7 @@ export const userRoleLabels: Record<UserRole, string> = {
   worker: "Worker",
   lab_tech: "Lab Tech",
   engineer: "Engineer",
+  shipping: "Shipping",
   admin: "Admin",
   owner: "Owner",
 };
@@ -163,6 +165,41 @@ export interface User {
   fullName: string;
   role: UserRole;
   active: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+// ─── Shipments ───
+
+export const shipmentStatuses = ["pending", "in_transit", "delivered"] as const;
+export type ShipmentStatus = (typeof shipmentStatuses)[number];
+
+export const shipmentStatusLabels: Record<ShipmentStatus, string> = {
+  pending: "Pending",
+  in_transit: "In Transit",
+  delivered: "Delivered",
+};
+
+export const shipmentTypes = ["incoming", "outgoing"] as const;
+export type ShipmentType = (typeof shipmentTypes)[number];
+
+export const shipmentTypeLabels: Record<ShipmentType, string> = {
+  incoming: "Incoming",
+  outgoing: "Outgoing",
+};
+
+export interface Shipment {
+  id: string;
+  shipmentId: string;
+  type: ShipmentType;
+  poNumber: string;
+  materialCode: string;
+  supplierName?: string;
+  customerName?: string;
+  carrier: string;
+  shipmentDate: string;
+  notes?: string;
+  status: ShipmentStatus;
   createdAt: string;
   updatedAt: string;
 }

@@ -6,6 +6,9 @@ import type {
   QualityDocument,
   User,
   UserRole,
+  Shipment,
+  ShipmentStatus,
+  ShipmentType,
 } from "./schemas";
 import { getFlags } from "./flags";
 
@@ -67,6 +70,24 @@ async function initTables() {
       full_name VARCHAR(100) NOT NULL,
       role VARCHAR(20) NOT NULL,
       active BOOLEAN DEFAULT true,
+      created_at VARCHAR(50) NOT NULL,
+      updated_at VARCHAR(50) NOT NULL
+    )
+  `;
+
+  await sql`
+    CREATE TABLE IF NOT EXISTS shipments (
+      id UUID PRIMARY KEY,
+      shipment_id VARCHAR(20) NOT NULL UNIQUE,
+      type VARCHAR(10) NOT NULL,
+      po_number VARCHAR(100) NOT NULL,
+      material_code VARCHAR(100) NOT NULL,
+      supplier_name VARCHAR(200),
+      customer_name VARCHAR(200),
+      carrier VARCHAR(200) NOT NULL,
+      shipment_date VARCHAR(50) NOT NULL,
+      notes TEXT,
+      status VARCHAR(20) DEFAULT 'pending',
       created_at VARCHAR(50) NOT NULL,
       updated_at VARCHAR(50) NOT NULL
     )
@@ -473,6 +494,100 @@ function mapUser(row: Record<string, unknown>): User {
     fullName: row.full_name as string,
     role: row.role as UserRole,
     active: row.active as boolean,
+    createdAt: row.created_at as string,
+    updatedAt: row.updated_at as string,
+  };
+}
+
+// ─── Shipments ───
+
+export const dbShipments = {
+  async getAll(filters?: { type?: string; status?: string }): Promise<Shipment[]> {
+    await initTables();
+    if (filters?.type && filters?.status) {
+      const { rows } = await sql`
+        SELECT * FROM shipments WHERE type = ${filters.type} AND status = ${filters.status} ORDER BY created_at DESC
+      `;
+      return rows.map(mapShipment);
+    }
+    if (filters?.type) {
+      const { rows } = await sql`
+        SELECT * FROM shipments WHERE type = ${filters.type} ORDER BY created_at DESC
+      `;
+      return rows.map(mapShipment);
+    }
+    if (filters?.status) {
+      const { rows } = await sql`
+        SELECT * FROM shipments WHERE status = ${filters.status} ORDER BY created_at DESC
+      `;
+      return rows.map(mapShipment);
+    }
+    const { rows } = await sql`
+      SELECT * FROM shipments ORDER BY created_at DESC
+    `;
+    return rows.map(mapShipment);
+  },
+
+  async getById(id: string): Promise<Shipment | null> {
+    await initTables();
+    const { rows } = await sql`
+      SELECT * FROM shipments WHERE id = ${id}
+    `;
+    return rows.length > 0 ? mapShipment(rows[0]) : null;
+  },
+
+  async create(shipment: Shipment): Promise<void> {
+    await initTables();
+    await sql`
+      INSERT INTO shipments (id, shipment_id, type, po_number, material_code, supplier_name, customer_name, carrier, shipment_date, notes, status, created_at, updated_at)
+      VALUES (${shipment.id}, ${shipment.shipmentId}, ${shipment.type}, ${shipment.poNumber}, ${shipment.materialCode}, ${shipment.supplierName || null}, ${shipment.customerName || null}, ${shipment.carrier}, ${shipment.shipmentDate}, ${shipment.notes || null}, ${shipment.status}, ${shipment.createdAt}, ${shipment.updatedAt})
+    `;
+  },
+
+  async update(id: string, data: Partial<Shipment>): Promise<boolean> {
+    await initTables();
+    const now = new Date().toISOString();
+    const existing = await this.getById(id);
+    if (!existing) return false;
+
+    const type = data.type ?? existing.type;
+    const poNumber = data.poNumber ?? existing.poNumber;
+    const materialCode = data.materialCode ?? existing.materialCode;
+    const supplierName = data.supplierName !== undefined ? data.supplierName : existing.supplierName;
+    const customerName = data.customerName !== undefined ? data.customerName : existing.customerName;
+    const carrier = data.carrier ?? existing.carrier;
+    const shipmentDate = data.shipmentDate ?? existing.shipmentDate;
+    const notes = data.notes !== undefined ? data.notes : existing.notes;
+    const status = data.status ?? existing.status;
+
+    const { rowCount } = await sql`
+      UPDATE shipments SET type = ${type}, po_number = ${poNumber}, material_code = ${materialCode}, supplier_name = ${supplierName || null}, customer_name = ${customerName || null}, carrier = ${carrier}, shipment_date = ${shipmentDate}, notes = ${notes || null}, status = ${status}, updated_at = ${now} WHERE id = ${id}
+    `;
+    return (rowCount ?? 0) > 0;
+  },
+
+  async delete(id: string): Promise<boolean> {
+    await initTables();
+    const { rowCount } = await sql`
+      DELETE FROM shipments WHERE id = ${id}
+    `;
+    return (rowCount ?? 0) > 0;
+  },
+};
+
+function mapShipment(row: Record<string, unknown>): Shipment {
+  return {
+    id: row.id as string,
+    shipmentId: row.shipment_id as string,
+    type: row.type as ShipmentType,
+    poNumber: row.po_number as string,
+    materialCode: row.material_code as string,
+    supplierName: (row.supplier_name as string) || undefined,
+    customerName: (row.customer_name as string) || undefined,
+    carrier: row.carrier as string,
+    shipmentDate: row.shipment_date as string,
+    notes: (row.notes as string) || undefined,
+    status: row.status as ShipmentStatus,
     createdAt: row.created_at as string,
     updatedAt: row.updated_at as string,
   };

@@ -35,7 +35,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Password must be at least 4 characters" }, { status: 400 });
     }
 
-    const validRoles: UserRole[] = ["worker", "lab_tech", "engineer", "admin", "owner"];
+    const validRoles: UserRole[] = ["worker", "lab_tech", "engineer", "shipping", "admin", "owner"];
     if (!validRoles.includes(role)) {
       return NextResponse.json({ error: "Invalid role" }, { status: 400 });
     }

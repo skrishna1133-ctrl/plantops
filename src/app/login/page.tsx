@@ -14,6 +14,7 @@ const roleRedirects: Record<string, string> = {
   owner: "/admin",
   lab_tech: "/lab",
   engineer: "/view",
+  shipping: "/shipments",
 };
 
 function LoginForm() {

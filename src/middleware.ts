@@ -6,6 +6,7 @@ const routeRoles: Record<string, UserRole[]> = {
   "/admin": ["admin", "owner"],
   "/lab": ["lab_tech", "admin", "owner"],
   "/view": ["engineer", "admin", "owner"],
+  "/shipments": ["shipping", "admin", "owner"],
 };
 
 export async function middleware(request: NextRequest) {
@@ -37,6 +38,7 @@ export async function middleware(request: NextRequest) {
     const redirectMap: Record<string, string> = {
       lab_tech: "/lab",
       engineer: "/view",
+      shipping: "/shipments",
       admin: "/admin",
       owner: "/admin",
     };
@@ -48,5 +50,5 @@ export async function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/admin/:path*", "/lab/:path*", "/view/:path*"],
+  matcher: ["/admin/:path*", "/lab/:path*", "/view/:path*", "/shipments/:path*"],
 };

@@ -17,6 +17,7 @@ import {
   BarChart3,
   FlaskConical,
   Users,
+  Package,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -50,6 +51,7 @@ import ChecklistSubmissionsTab from "@/components/admin/checklist-submissions-ta
 import ChecklistReportsTab from "@/components/admin/checklist-reports-tab";
 import QualityDocumentsTab from "@/components/admin/quality-documents-tab";
 import UsersTab from "@/components/admin/users-tab";
+import ShipmentsTab from "@/components/admin/shipments-tab";
 import { ThemeToggle } from "@/components/theme-toggle";
 
 const criticalityColors: Record<string, string> = {
@@ -82,7 +84,7 @@ const plantLabels: Record<string, string> = {
   "plant-b": "Plant B",
 };
 
-type AdminTab = "incidents" | "templates" | "submissions" | "reports" | "quality" | "users";
+type AdminTab = "incidents" | "templates" | "submissions" | "reports" | "quality" | "users" | "shipments";
 
 export default function AdminPage() {
   const [activeTab, setActiveTab] = useState<AdminTab>("incidents");
@@ -240,6 +242,7 @@ export default function AdminPage() {
               { id: "reports" as AdminTab, label: "Reports", icon: BarChart3 },
               { id: "quality" as AdminTab, label: "Quality", icon: FlaskConical },
               { id: "users" as AdminTab, label: "Users", icon: Users },
+              { id: "shipments" as AdminTab, label: "Shipments", icon: Package },
             ]).map((tab) => (
               <button
                 key={tab.id}
@@ -273,6 +276,9 @@ export default function AdminPage() {
 
         {/* Users Tab */}
         {activeTab === "users" && <UsersTab />}
+
+        {/* Shipments Tab */}
+        {activeTab === "shipments" && <ShipmentsTab />}
 
         {/* Incidents Tab */}
         {activeTab === "incidents" && <>

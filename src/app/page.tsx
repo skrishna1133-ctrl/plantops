@@ -47,13 +47,13 @@ const tools = [
     available: true,
   },
   {
-    id: "inventory",
-    name: "Inventory",
-    description: "Track equipment and materials inventory",
+    id: "shipments",
+    name: "Shipments",
+    description: "Track incoming and outgoing shipments",
     icon: Package,
-    color: "text-teal-500",
-    bgColor: "bg-teal-500/10 hover:bg-teal-500/20",
-    available: false,
+    color: "text-indigo-500",
+    bgColor: "bg-indigo-500/10 hover:bg-indigo-500/20",
+    available: true,
   },
   {
     id: "downtime",
@@ -80,6 +80,7 @@ const roleDashboards: Record<string, { href: string; label: string; icon: typeof
   owner: { href: "/admin", label: "Admin", icon: Shield },
   lab_tech: { href: "/lab", label: "Lab", icon: FlaskConical },
   engineer: { href: "/view", label: "View", icon: Eye },
+  shipping: { href: "/shipments", label: "Shipments", icon: Package },
 };
 
 export default function Home() {
@@ -106,6 +107,8 @@ export default function Home() {
       router.push("/checklists");
     } else if (toolId === "quality") {
       router.push("/quality");
+    } else if (toolId === "shipments") {
+      router.push("/shipments");
     }
   };
 
