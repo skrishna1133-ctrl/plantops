@@ -146,7 +146,9 @@ export default function FillQualityPage() {
     );
   }
 
-  const docTitle = `Metal Contamination and Bulk Density Data for ${doc.materialCode} on ${new Date(doc.createdAt).toLocaleDateString()}`;
+  const createdDate = new Date(doc.createdAt);
+  const dateStr = `${String(createdDate.getMonth() + 1).padStart(2, "0")}/${String(createdDate.getDate()).padStart(2, "0")}/${createdDate.getFullYear()}`;
+  const docTitle = `Metal Contamination and Bulk Density Data for ${doc.materialCode} on ${dateStr}`;
 
   return (
     <div className="min-h-screen bg-background">

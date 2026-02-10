@@ -41,8 +41,13 @@ interface QualityDocDetailDialogProps {
   onUpdated: () => void;
 }
 
+function formatDate(iso: string): string {
+  const d = new Date(iso);
+  return `${String(d.getMonth() + 1).padStart(2, "0")}/${String(d.getDate()).padStart(2, "0")}/${d.getFullYear()}`;
+}
+
 function getDocTitle(doc: QualityDocument): string {
-  return `Metal Contamination and Bulk Density Data for ${doc.materialCode} on ${new Date(doc.createdAt).toLocaleDateString()}`;
+  return `Metal Contamination and Bulk Density Data for ${doc.materialCode} on ${formatDate(doc.createdAt)}`;
 }
 
 export default function QualityDocDetailDialog({
@@ -155,7 +160,7 @@ export default function QualityDocDetailDialog({
       pdf.text(`Customer PO: ${doc.customerPo}`, 14, 42);
       pdf.text(`Tare Weight: ${doc.tareWeight} lbs`, 14, 48);
       pdf.text(`Filled by: ${doc.personName || "—"}`, 14, 54);
-      pdf.text(`Date: ${new Date(doc.createdAt).toLocaleDateString()}`, 14, 60);
+      pdf.text(`Date: ${formatDate(doc.createdAt)}`, 14, 60);
 
       // Table
       const tableData = rows.map((r) => [
