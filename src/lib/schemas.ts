@@ -105,3 +105,34 @@ export interface ChecklistSubmission {
   notes?: string;
   submittedAt: string;
 }
+
+// ─── Quality Documents ───
+
+export type QualityDocStatus = "draft" | "worker_filled" | "complete";
+
+export interface QualityDocRow {
+  serialNumber: number;
+  grossWeight?: number;
+  netWeight?: number;
+  bulkDensityGcc?: number;
+  bulkDensityLbcc?: number;
+  metalContamGrams?: number;
+  metalContamPct?: number;
+  photoUrl?: string;
+}
+
+export interface QualityDocument {
+  id: string;
+  docId: string;
+  poNumber: string;
+  materialCode: string;
+  customerName: string;
+  customerPo: string;
+  tareWeight: number;
+  rowCount: number;
+  personName?: string;
+  rows: QualityDocRow[];
+  status: QualityDocStatus;
+  createdAt: string;
+  updatedAt: string;
+}

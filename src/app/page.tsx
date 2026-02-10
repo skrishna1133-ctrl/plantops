@@ -3,7 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { AlertTriangle, Wrench, ClipboardCheck, Package, Clock, FileText, Shield } from "lucide-react";
+import { AlertTriangle, Wrench, ClipboardCheck, Package, Clock, FileText, Shield, FileCheck } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import IncidentReportDialog from "@/components/incident-report-dialog";
@@ -38,12 +38,21 @@ const tools = [
     available: true,
   },
   {
+    id: "quality",
+    name: "Quality",
+    description: "Fill quality inspection documents for shipments",
+    icon: FileCheck,
+    color: "text-purple-500",
+    bgColor: "bg-purple-500/10 hover:bg-purple-500/20",
+    available: true,
+  },
+  {
     id: "inventory",
     name: "Inventory",
     description: "Track equipment and materials inventory",
     icon: Package,
-    color: "text-purple-500",
-    bgColor: "bg-purple-500/10 hover:bg-purple-500/20",
+    color: "text-teal-500",
+    bgColor: "bg-teal-500/10 hover:bg-teal-500/20",
     available: false,
   },
   {
@@ -75,6 +84,8 @@ export default function Home() {
       setIncidentDialogOpen(true);
     } else if (toolId === "checklists") {
       router.push("/checklists");
+    } else if (toolId === "quality") {
+      router.push("/quality");
     }
   };
 

@@ -15,6 +15,7 @@ import {
   ClipboardList,
   FileCheck,
   BarChart3,
+  FlaskConical,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -46,6 +47,7 @@ import type { IncidentReport } from "@/lib/schemas";
 import ChecklistTemplatesTab from "@/components/admin/checklist-templates-tab";
 import ChecklistSubmissionsTab from "@/components/admin/checklist-submissions-tab";
 import ChecklistReportsTab from "@/components/admin/checklist-reports-tab";
+import QualityDocumentsTab from "@/components/admin/quality-documents-tab";
 import { ThemeToggle } from "@/components/theme-toggle";
 
 const criticalityColors: Record<string, string> = {
@@ -78,7 +80,7 @@ const plantLabels: Record<string, string> = {
   "plant-b": "Plant B",
 };
 
-type AdminTab = "incidents" | "templates" | "submissions" | "reports";
+type AdminTab = "incidents" | "templates" | "submissions" | "reports" | "quality";
 
 export default function AdminPage() {
   const [activeTab, setActiveTab] = useState<AdminTab>("incidents");
@@ -234,6 +236,7 @@ export default function AdminPage() {
               { id: "templates" as AdminTab, label: "Templates", icon: ClipboardList },
               { id: "submissions" as AdminTab, label: "Submissions", icon: FileCheck },
               { id: "reports" as AdminTab, label: "Reports", icon: BarChart3 },
+              { id: "quality" as AdminTab, label: "Quality", icon: FlaskConical },
             ]).map((tab) => (
               <button
                 key={tab.id}
@@ -261,6 +264,9 @@ export default function AdminPage() {
 
         {/* Reports Tab */}
         {activeTab === "reports" && <ChecklistReportsTab />}
+
+        {/* Quality Tab */}
+        {activeTab === "quality" && <QualityDocumentsTab />}
 
         {/* Incidents Tab */}
         {activeTab === "incidents" && <>
