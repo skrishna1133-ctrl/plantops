@@ -46,6 +46,7 @@ import type { IncidentReport } from "@/lib/schemas";
 import ChecklistTemplatesTab from "@/components/admin/checklist-templates-tab";
 import ChecklistSubmissionsTab from "@/components/admin/checklist-submissions-tab";
 import ChecklistReportsTab from "@/components/admin/checklist-reports-tab";
+import { ThemeToggle } from "@/components/theme-toggle";
 
 const criticalityColors: Record<string, string> = {
   minor: "bg-yellow-500/20 text-yellow-400 border-yellow-500/30",
@@ -210,6 +211,7 @@ export default function AdminPage() {
                 Refresh
               </Button>
             )}
+            <ThemeToggle />
             <Button
               variant="ghost"
               size="sm"

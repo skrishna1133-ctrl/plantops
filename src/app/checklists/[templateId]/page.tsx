@@ -30,6 +30,7 @@ import {
   type ChecklistType,
   type ItemResponse,
 } from "@/lib/schemas";
+import { ThemeToggle } from "@/components/theme-toggle";
 
 interface ResponseState {
   checkboxValue?: boolean;
@@ -224,25 +225,28 @@ export default function FillChecklistPage() {
   return (
     <div className="min-h-screen bg-background">
       <header className="border-b border-border bg-card sticky top-0 z-10">
-        <div className="max-w-2xl mx-auto px-4 py-4 flex items-center gap-3">
-          <Link href="/checklists">
-            <Button variant="ghost" size="icon">
-              <ArrowLeft size={20} />
-            </Button>
-          </Link>
-          <div>
-            <h1 className="text-lg font-bold tracking-tight">
-              {template.title}
-            </h1>
-            <div className="flex items-center gap-2">
-              <Badge variant="outline" className="text-[10px]">
-                {checklistTypeLabels[template.type]}
-              </Badge>
-              <span className="text-xs text-muted-foreground">
-                {template.items.length} items
-              </span>
+        <div className="max-w-2xl mx-auto px-4 py-4 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <Link href="/checklists">
+              <Button variant="ghost" size="icon">
+                <ArrowLeft size={20} />
+              </Button>
+            </Link>
+            <div>
+              <h1 className="text-lg font-bold tracking-tight">
+                {template.title}
+              </h1>
+              <div className="flex items-center gap-2">
+                <Badge variant="outline" className="text-[10px]">
+                  {checklistTypeLabels[template.type]}
+                </Badge>
+                <span className="text-xs text-muted-foreground">
+                  {template.items.length} items
+                </span>
+              </div>
             </div>
           </div>
+          <ThemeToggle />
         </div>
       </header>
 

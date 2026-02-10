@@ -7,6 +7,7 @@ import { AlertTriangle, Wrench, ClipboardCheck, Package, Clock, FileText, Shield
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import IncidentReportDialog from "@/components/incident-report-dialog";
+import { ThemeToggle } from "@/components/theme-toggle";
 
 const tools = [
   {
@@ -91,12 +92,15 @@ export default function Home() {
               <p className="text-xs text-muted-foreground">Manufacturing Operations Suite</p>
             </div>
           </div>
-          <Link href="/admin">
-            <Button variant="outline" size="sm">
-              <Shield size={14} className="mr-2" />
-              Admin
-            </Button>
-          </Link>
+          <div className="flex items-center gap-1">
+            <ThemeToggle />
+            <Link href="/admin">
+              <Button variant="outline" size="sm">
+                <Shield size={14} className="mr-2" />
+                Admin
+              </Button>
+            </Link>
+          </div>
         </div>
       </header>
 
