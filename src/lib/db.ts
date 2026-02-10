@@ -4,6 +4,7 @@ import type {
   ChecklistTemplate,
   ChecklistSubmission,
 } from "./schemas";
+import { getFlags } from "./flags";
 
 // ─── Table Initialization ───
 
@@ -236,7 +237,7 @@ export const dbSubmissions = {
     let removed = 0;
     for (const row of rows) {
       const sub = mapSubmission(row);
-      if (!hasFlags(sub)) {
+      if (getFlags(sub).length === 0) {
         await sql`DELETE FROM checklist_submissions WHERE id = ${sub.id}`;
         removed++;
       }
@@ -290,14 +291,3 @@ function mapSubmission(row: Record<string, unknown>): ChecklistSubmission {
   };
 }
 
-function hasFlags(sub: ChecklistSubmission): boolean {
-  for (const r of sub.responses) {
-    if (r.itemType === "checkbox" && r.checkboxValue === false) return true;
-    if (r.itemType === "pass_fail" && r.passFail === "fail") return true;
-    if (r.itemType === "numeric" && r.numericValue !== undefined) {
-      if (r.numericMin !== undefined && r.numericValue < r.numericMin) return true;
-      if (r.numericMax !== undefined && r.numericValue > r.numericMax) return true;
-    }
-  }
-  return false;
-}

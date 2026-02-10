@@ -125,7 +125,7 @@ export default function FillChecklistPage() {
     setSubmitting(true);
 
     try {
-      const itemResponses: Omit<ItemResponse, "">[] = template.items.map(
+      const itemResponses: ItemResponse[] = template.items.map(
         (item) => {
           const r = responses[item.id];
           const resp: ItemResponse = {
