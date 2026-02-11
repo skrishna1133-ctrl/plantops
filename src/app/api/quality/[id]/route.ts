@@ -18,8 +18,8 @@ export async function GET(
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    // Check role - must be worker, admin, or owner
-    if (!["worker", "admin", "owner"].includes(payload.role)) {
+    // Check role - must be worker, lab_tech, admin, or owner
+    if (!["worker", "lab_tech", "admin", "owner"].includes(payload.role)) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
@@ -53,8 +53,8 @@ export async function PATCH(
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    // Check role - must be worker, admin, or owner
-    if (!["worker", "admin", "owner"].includes(payload.role)) {
+    // Check role - must be worker, lab_tech, admin, or owner
+    if (!["worker", "lab_tech", "admin", "owner"].includes(payload.role)) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
