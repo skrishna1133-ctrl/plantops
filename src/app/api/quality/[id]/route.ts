@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { dbQualityDocs, dbUsers } from "@/lib/db";
-import { verifySession } from "@/lib/auth";
+import { verifySessionToken } from "@/lib/auth";
 
 export async function GET(
   request: NextRequest,
@@ -13,7 +13,7 @@ export async function GET(
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const payload = verifySession(sessionCookie.value);
+    const payload = verifySessionToken(sessionCookie.value);
     if (!payload) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
@@ -48,7 +48,7 @@ export async function PATCH(
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const payload = verifySession(sessionCookie.value);
+    const payload = verifySessionToken(sessionCookie.value);
     if (!payload) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }

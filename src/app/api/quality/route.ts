@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { dbQualityDocs } from "@/lib/db";
-import { verifySession } from "@/lib/auth";
+import { verifySessionToken } from "@/lib/auth";
 import { v4 as uuidv4 } from "uuid";
 import type { QualityDocument, QualityDocRow } from "@/lib/schemas";
 
@@ -19,7 +19,7 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const payload = verifySession(sessionCookie.value);
+    const payload = verifySessionToken(sessionCookie.value);
     if (!payload) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
