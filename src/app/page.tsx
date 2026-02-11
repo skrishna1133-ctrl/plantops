@@ -8,6 +8,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import IncidentReportDialog from "@/components/incident-report-dialog";
 import { ThemeToggle } from "@/components/theme-toggle";
+import type { UserRole } from "@/lib/schemas";
 
 const tools = [
   {
@@ -18,6 +19,7 @@ const tools = [
     color: "text-red-500",
     bgColor: "bg-red-500/10 hover:bg-red-500/20",
     available: true,
+    requiredRoles: [] as UserRole[], // Empty means everyone can access
   },
   {
     id: "maintenance",
@@ -27,6 +29,7 @@ const tools = [
     color: "text-blue-500",
     bgColor: "bg-blue-500/10 hover:bg-blue-500/20",
     available: false,
+    requiredRoles: [] as UserRole[],
   },
   {
     id: "checklists",
@@ -36,6 +39,7 @@ const tools = [
     color: "text-green-500",
     bgColor: "bg-green-500/10 hover:bg-green-500/20",
     available: true,
+    requiredRoles: ["worker", "admin", "owner"] as UserRole[],
   },
   {
     id: "quality",
@@ -45,6 +49,7 @@ const tools = [
     color: "text-purple-500",
     bgColor: "bg-purple-500/10 hover:bg-purple-500/20",
     available: true,
+    requiredRoles: ["worker", "admin", "owner"] as UserRole[],
   },
   {
     id: "shipments",
@@ -54,6 +59,7 @@ const tools = [
     color: "text-indigo-500",
     bgColor: "bg-indigo-500/10 hover:bg-indigo-500/20",
     available: true,
+    requiredRoles: ["shipping", "admin", "owner"] as UserRole[],
   },
   {
     id: "downtime",
@@ -63,6 +69,7 @@ const tools = [
     color: "text-amber-500",
     bgColor: "bg-amber-500/10 hover:bg-amber-500/20",
     available: false,
+    requiredRoles: [] as UserRole[],
   },
   {
     id: "shift-handover",
@@ -72,6 +79,7 @@ const tools = [
     color: "text-cyan-500",
     bgColor: "bg-cyan-500/10 hover:bg-cyan-500/20",
     available: false,
+    requiredRoles: [] as UserRole[],
   },
 ];
 
@@ -113,7 +121,24 @@ export default function Home() {
       });
   }, []);
 
+  // Check if user has access to a tool
+  const hasAccess = (tool: typeof tools[0]): boolean => {
+    if (!tool.available) return false; // Not available yet
+    if (tool.requiredRoles.length === 0) return true; // Everyone can access
+    if (!userRole) return false; // Not logged in
+    return tool.requiredRoles.includes(userRole as UserRole);
+  };
+
   const handleToolClick = (toolId: string) => {
+    const tool = tools.find(t => t.id === toolId);
+    if (!tool) return;
+
+    // Check if user has access
+    if (!hasAccess(tool)) {
+      return; // Do nothing if user doesn't have access
+    }
+
+    // Handle tool navigation
     if (toolId === "incident-report") {
       setIncidentDialogOpen(true);
     } else if (toolId === "checklists") {
@@ -209,19 +234,21 @@ export default function Home() {
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           {tools.map((tool) => {
             const Icon = tool.icon;
+            const canAccess = hasAccess(tool);
+
             return (
               <Card
                 key={tool.id}
-                className={`cursor-pointer transition-all duration-200 border-border ${
-                  tool.available
-                    ? `${tool.bgColor} border-2`
-                    : "opacity-50 cursor-not-allowed"
+                className={`transition-all duration-200 border-border ${
+                  canAccess
+                    ? `cursor-pointer ${tool.bgColor} border-2`
+                    : "opacity-50 cursor-not-allowed grayscale"
                 }`}
-                onClick={() => tool.available && handleToolClick(tool.id)}
+                onClick={() => canAccess && handleToolClick(tool.id)}
               >
                 <CardContent className="p-6">
                   <div className="flex items-start gap-4">
-                    <div className={`${tool.color} mt-1`}>
+                    <div className={canAccess ? `${tool.color} mt-1` : "text-muted-foreground mt-1"}>
                       <Icon size={28} />
                     </div>
                     <div className="flex-1">
@@ -230,6 +257,11 @@ export default function Home() {
                         {!tool.available && (
                           <span className="text-[10px] uppercase tracking-wider text-muted-foreground bg-muted px-1.5 py-0.5 rounded">
                             Coming Soon
+                          </span>
+                        )}
+                        {tool.available && !canAccess && (
+                          <span className="text-[10px] uppercase tracking-wider text-muted-foreground bg-muted px-1.5 py-0.5 rounded">
+                            No Access
                           </span>
                         )}
                       </div>
