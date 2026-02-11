@@ -1,11 +1,28 @@
 import { NextRequest, NextResponse } from "next/server";
-import { dbQualityDocs } from "@/lib/db";
+import { dbQualityDocs, dbUsers } from "@/lib/db";
+import { verifySession } from "@/lib/auth";
 
 export async function GET(
-  _request: NextRequest,
+  request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    // Verify authentication
+    const sessionCookie = request.cookies.get("plantops_session");
+    if (!sessionCookie) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const payload = verifySession(sessionCookie.value);
+    if (!payload) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    // Check role - must be worker, admin, or owner
+    if (!["worker", "admin", "owner"].includes(payload.role)) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+
     const { id } = await params;
     const doc = await dbQualityDocs.getById(id);
 
@@ -25,14 +42,36 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    // Verify authentication
+    const sessionCookie = request.cookies.get("plantops_session");
+    if (!sessionCookie) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const payload = verifySession(sessionCookie.value);
+    if (!payload) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    // Check role - must be worker, admin, or owner
+    if (!["worker", "admin", "owner"].includes(payload.role)) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+
+    // Fetch user from database
+    const user = await dbUsers.getById(payload.userId);
+    if (!user) {
+      return NextResponse.json({ error: "User not found" }, { status: 404 });
+    }
+
     const { id } = await params;
     const body = await request.json();
-    const { rows, status, personName } = body;
+    const { rows, status } = body;
 
     const updateData: Record<string, unknown> = {};
     if (rows !== undefined) updateData.rows = rows;
     if (status !== undefined) updateData.status = status;
-    if (personName !== undefined) updateData.personName = personName;
+    updateData.personName = user.fullName; // Auto-populate from session
 
     const updated = await dbQualityDocs.update(id, updateData);
     if (!updated) {

@@ -81,6 +81,7 @@ const roleDashboards: Record<string, { href: string; label: string; icon: typeof
   lab_tech: { href: "/lab", label: "Lab", icon: FlaskConical },
   engineer: { href: "/view", label: "View", icon: Eye },
   shipping: { href: "/shipments", label: "Shipments", icon: Package },
+  worker: { href: "/quality", label: "Quality", icon: FileCheck },
 };
 
 export default function Home() {

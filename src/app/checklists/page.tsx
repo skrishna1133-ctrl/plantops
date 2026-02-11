@@ -2,7 +2,8 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { ArrowLeft, Loader2, ClipboardList, ChevronRight } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { ArrowLeft, Loader2, ClipboardList, ChevronRight, LogOut } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
@@ -14,16 +15,43 @@ import {
 import { ThemeToggle } from "@/components/theme-toggle";
 
 export default function ChecklistsPage() {
+  const router = useRouter();
   const [templates, setTemplates] = useState<ChecklistTemplate[]>([]);
+  const [userName, setUserName] = useState("");
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetch("/api/checklists/templates?active=true")
+    // Check authentication first
+    fetch("/api/auth")
       .then((res) => res.json())
-      .then((data) => setTemplates(data))
-      .catch(console.error)
+      .then((data) => {
+        if (!data.authenticated) {
+          router.push("/login?from=/checklists");
+          return;
+        }
+        setUserName(data.fullName || "");
+        // User is authenticated, fetch templates
+        return fetch("/api/checklists/templates?active=true");
+      })
+      .then((res) => {
+        if (!res) return null;
+        return res.json();
+      })
+      .then((data) => {
+        if (data) setTemplates(data);
+      })
+      .catch((error) => {
+        console.error(error);
+        router.push("/login?from=/checklists");
+      })
       .finally(() => setLoading(false));
-  }, []);
+  }, [router]);
+
+  const handleLogout = async () => {
+    await fetch("/api/auth", { method: "DELETE" });
+    router.push("/login");
+    router.refresh();
+  };
 
   // Group templates by type
   const grouped = templates.reduce<Record<string, ChecklistTemplate[]>>(
@@ -51,11 +79,22 @@ export default function ChecklistsPage() {
             <div>
               <h1 className="text-xl font-bold tracking-tight">Checklists</h1>
               <p className="text-xs text-muted-foreground">
-                Select a checklist to fill
+                {userName ? `Hi, ${userName} — ` : ""}Select a checklist to fill
               </p>
             </div>
           </div>
-          <ThemeToggle />
+          <div className="flex items-center gap-2">
+            <ThemeToggle />
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={handleLogout}
+              className="text-muted-foreground hover:text-red-400"
+            >
+              <LogOut size={14} className="mr-2" />
+              Logout
+            </Button>
+          </div>
         </div>
       </header>
 

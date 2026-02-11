@@ -15,6 +15,7 @@ const roleRedirects: Record<string, string> = {
   lab_tech: "/lab",
   engineer: "/view",
   shipping: "/shipments",
+  worker: "/quality",
 };
 
 function LoginForm() {

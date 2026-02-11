@@ -20,22 +20,39 @@ export default function FillQualityPage() {
 
   const [doc, setDoc] = useState<QualityDocument | null>(null);
   const [loading, setLoading] = useState(true);
-  const [personName, setPersonName] = useState("");
   const [rows, setRows] = useState<QualityDocRow[]>([]);
   const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const [error, setError] = useState("");
 
   useEffect(() => {
-    fetch(`/api/quality/${docId}`)
+    // Check authentication first
+    fetch("/api/auth")
       .then((res) => res.json())
-      .then((data: QualityDocument) => {
-        setDoc(data);
-        setRows([...data.rows]);
+      .then((data) => {
+        if (!data.authenticated) {
+          router.push("/login?from=/quality");
+          return;
+        }
+        // User is authenticated, fetch quality doc
+        return fetch(`/api/quality/${docId}`);
       })
-      .catch(console.error)
+      .then((res) => {
+        if (!res) return null;
+        return res.json();
+      })
+      .then((data: QualityDocument | null) => {
+        if (data) {
+          setDoc(data);
+          setRows([...data.rows]);
+        }
+      })
+      .catch((error) => {
+        console.error(error);
+        router.push("/login?from=/quality");
+      })
       .finally(() => setLoading(false));
-  }, [docId]);
+  }, [docId, router]);
 
   const updateRow = (serialNumber: number, field: "grossWeight" | "bulkDensityGcc", value: string) => {
     setRows((prev) =>
@@ -60,10 +77,6 @@ export default function FillQualityPage() {
 
   const handleSubmit = async () => {
     setError("");
-    if (!personName || personName.length < 2) {
-      setError("Please enter your name (at least 2 characters)");
-      return;
-    }
 
     const incomplete = rows.some((r) => r.grossWeight === undefined || r.bulkDensityGcc === undefined);
     if (incomplete) {
@@ -78,7 +91,6 @@ export default function FillQualityPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           rows,
-          personName,
           status: "worker_filled",
         }),
       });
@@ -184,18 +196,6 @@ export default function FillQualityPage() {
             </div>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="personName">Your Name</Label>
-              <Input
-                id="personName"
-                value={personName}
-                onChange={(e) => setPersonName(e.target.value)}
-                placeholder="Enter your name"
-              />
-            </div>
-
-            <Separator />
-
             <div className="space-y-4">
               {rows.map((r) => (
                 <div key={r.serialNumber} className="p-4 border rounded-lg space-y-3">

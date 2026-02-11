@@ -46,7 +46,6 @@ export default function FillChecklistPage() {
 
   const [template, setTemplate] = useState<ChecklistTemplate | null>(null);
   const [loading, setLoading] = useState(true);
-  const [personName, setPersonName] = useState("");
   const [shift, setShift] = useState<string>("");
   const [responses, setResponses] = useState<Record<string, ResponseState>>({});
   const [notes, setNotes] = useState("");
@@ -56,9 +55,23 @@ export default function FillChecklistPage() {
   const [error, setError] = useState("");
 
   useEffect(() => {
-    fetch(`/api/checklists/templates?active=true`)
+    // Check authentication first
+    fetch("/api/auth")
       .then((res) => res.json())
-      .then((data: ChecklistTemplate[]) => {
+      .then((data) => {
+        if (!data.authenticated) {
+          router.push("/login?from=/checklists");
+          return;
+        }
+        // User is authenticated, fetch templates
+        return fetch(`/api/checklists/templates?active=true`);
+      })
+      .then((res) => {
+        if (!res) return null;
+        return res.json();
+      })
+      .then((data: ChecklistTemplate[] | null) => {
+        if (!data) return;
         const found = data.find((t) => t.id === templateId);
         if (found) {
           setTemplate(found);
@@ -75,9 +88,12 @@ export default function FillChecklistPage() {
           setResponses(initial);
         }
       })
-      .catch(console.error)
+      .catch((error) => {
+        console.error(error);
+        router.push("/login?from=/checklists");
+      })
       .finally(() => setLoading(false));
-  }, [templateId]);
+  }, [templateId, router]);
 
   const updateResponse = (
     itemId: string,
@@ -93,10 +109,6 @@ export default function FillChecklistPage() {
   const handleSubmit = async () => {
     setError("");
 
-    if (!personName.trim()) {
-      setError("Please enter your name.");
-      return;
-    }
     if (!shift) {
       setError("Please select your shift.");
       return;
@@ -145,7 +157,6 @@ export default function FillChecklistPage() {
 
       const payload = {
         templateId: template.id,
-        personName: personName.trim(),
         shift,
         responses: itemResponses,
         notes: notes.trim() || undefined,
@@ -254,27 +265,17 @@ export default function FillChecklistPage() {
         {/* Worker Info */}
         <Card>
           <CardContent className="p-4 space-y-3">
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1">
-                <Label className="text-xs">Your Name *</Label>
-                <Input
-                  placeholder="Enter your name"
-                  value={personName}
-                  onChange={(e) => setPersonName(e.target.value)}
-                />
-              </div>
-              <div className="space-y-1">
-                <Label className="text-xs">Shift *</Label>
-                <Select value={shift} onValueChange={setShift}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select shift" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="day">Day Shift</SelectItem>
-                    <SelectItem value="night">Night Shift</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
+            <div className="space-y-1">
+              <Label className="text-xs">Shift *</Label>
+              <Select value={shift} onValueChange={setShift}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select shift" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="day">Day Shift</SelectItem>
+                  <SelectItem value="night">Night Shift</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
           </CardContent>
         </Card>

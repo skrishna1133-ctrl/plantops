@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { dbQualityDocs } from "@/lib/db";
+import { verifySession } from "@/lib/auth";
 import { v4 as uuidv4 } from "uuid";
 import type { QualityDocument, QualityDocRow } from "@/lib/schemas";
 
@@ -12,6 +13,22 @@ function generateDocId(): string {
 
 export async function GET(request: NextRequest) {
   try {
+    // Verify authentication
+    const sessionCookie = request.cookies.get("plantops_session");
+    if (!sessionCookie) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const payload = verifySession(sessionCookie.value);
+    if (!payload) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    // Check role - must be worker, admin, or owner
+    if (!["worker", "admin", "owner"].includes(payload.role)) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+
     const { searchParams } = new URL(request.url);
     const status = searchParams.get("status") || undefined;
 

@@ -22,6 +22,7 @@ const roleColors: Record<string, string> = {
   engineer: "bg-cyan-500/20 text-cyan-400 border-cyan-500/30",
   admin: "bg-orange-500/20 text-orange-400 border-orange-500/30",
   owner: "bg-red-500/20 text-red-400 border-red-500/30",
+  shipping: "bg-indigo-500/20 text-indigo-400 border-indigo-500/30",
 };
 
 export default function UsersTab() {

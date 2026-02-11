@@ -2,7 +2,8 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { ArrowLeft, Loader2, FileCheck, ChevronRight } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { ArrowLeft, Loader2, FileCheck, ChevronRight, LogOut } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
@@ -22,16 +23,43 @@ const statusColors: Record<string, string> = {
 };
 
 export default function QualityPage() {
+  const router = useRouter();
   const [docs, setDocs] = useState<QualityDocument[]>([]);
+  const [userName, setUserName] = useState("");
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetch("/api/quality")
+    // Check authentication first
+    fetch("/api/auth")
       .then((res) => res.json())
-      .then((data) => setDocs(data))
-      .catch(console.error)
+      .then((data) => {
+        if (!data.authenticated) {
+          router.push("/login?from=/quality");
+          return;
+        }
+        setUserName(data.fullName || "");
+        // User is authenticated, fetch quality docs
+        return fetch("/api/quality");
+      })
+      .then((res) => {
+        if (!res) return null;
+        return res.json();
+      })
+      .then((data) => {
+        if (data) setDocs(data);
+      })
+      .catch((error) => {
+        console.error(error);
+        router.push("/login?from=/quality");
+      })
       .finally(() => setLoading(false));
-  }, []);
+  }, [router]);
+
+  const handleLogout = async () => {
+    await fetch("/api/auth", { method: "DELETE" });
+    router.push("/login");
+    router.refresh();
+  };
 
   const draftDocs = docs.filter((d) => d.status === "draft");
   const otherDocs = docs.filter((d) => d.status !== "draft");
@@ -50,13 +78,24 @@ export default function QualityPage() {
               <FileCheck className="text-white" size={22} />
             </div>
             <div>
-              <h1 className="text-xl font-bold tracking-tight">Quality</h1>
+              <h1 className="text-xl font-bold tracking-tight">Quality Inspection</h1>
               <p className="text-xs text-muted-foreground">
-                Quality inspection documents
+                {userName ? `Hi, ${userName} — ` : ""}Fill quality documents
               </p>
             </div>
           </div>
-          <ThemeToggle />
+          <div className="flex items-center gap-2">
+            <ThemeToggle />
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={handleLogout}
+              className="text-muted-foreground hover:text-red-400"
+            >
+              <LogOut size={14} className="mr-2" />
+              Logout
+            </Button>
+          </div>
         </div>
       </header>
 

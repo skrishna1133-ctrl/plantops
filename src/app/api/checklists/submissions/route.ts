@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { dbTemplates, dbSubmissions } from "@/lib/db";
+import { dbTemplates, dbSubmissions, dbUsers } from "@/lib/db";
+import { verifySession } from "@/lib/auth";
 import { v4 as uuidv4 } from "uuid";
 import type { ChecklistSubmission, ItemResponse } from "@/lib/schemas";
 
@@ -26,14 +27,33 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
+    // Verify authentication
+    const sessionCookie = request.cookies.get("plantops_session");
+    if (!sessionCookie) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const payload = verifySession(sessionCookie.value);
+    if (!payload) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    // Check role - must be worker, admin, or owner
+    if (!["worker", "admin", "owner"].includes(payload.role)) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+
+    // Fetch user from database
+    const user = await dbUsers.getById(payload.userId);
+    if (!user) {
+      return NextResponse.json({ error: "User not found" }, { status: 404 });
+    }
+
     const body = await request.json();
-    const { templateId, personName, shift, responses, notes } = body;
+    const { templateId, shift, responses, notes } = body;
 
     if (!templateId) {
       return NextResponse.json({ error: "Template ID is required" }, { status: 400 });
-    }
-    if (!personName || personName.length < 2) {
-      return NextResponse.json({ error: "Name must be at least 2 characters" }, { status: 400 });
     }
     if (!shift || !["day", "night"].includes(shift)) {
       return NextResponse.json({ error: "Shift must be day or night" }, { status: 400 });
@@ -67,7 +87,7 @@ export async function POST(request: NextRequest) {
       templateId,
       templateTitle: template.title,
       templateType: template.type,
-      personName,
+      personName: user.fullName, // Use authenticated user's name
       shift,
       responses: enrichedResponses,
       notes: notes || undefined,
