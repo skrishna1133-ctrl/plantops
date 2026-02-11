@@ -101,7 +101,7 @@ export default function AdminPage() {
 
   const handleLogout = async () => {
     await fetch("/api/auth", { method: "DELETE" });
-    router.push("/login");
+    router.push("/");
     router.refresh();
   };
 

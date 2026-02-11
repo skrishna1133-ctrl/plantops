@@ -20,7 +20,7 @@ export default function ShipmentsPage() {
 
   const handleLogout = async () => {
     await fetch("/api/auth", { method: "DELETE" });
-    router.push("/login");
+    router.push("/");
     router.refresh();
   };
 

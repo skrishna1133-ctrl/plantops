@@ -1,94 +1,35 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { AlertTriangle, Wrench, ClipboardCheck, Package, Clock, FileText, Shield, FileCheck, LogIn, FlaskConical, Eye } from "lucide-react";
-import { Card, CardContent } from "@/components/ui/card";
+import { Suspense, useState, useEffect } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { Loader2, Lock } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import IncidentReportDialog from "@/components/incident-report-dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ThemeToggle } from "@/components/theme-toggle";
 
-const tools = [
-  {
-    id: "incident-report",
-    name: "Report Incident",
-    description: "Report safety incidents, equipment issues, or quality concerns",
-    icon: AlertTriangle,
-    color: "text-red-500",
-    bgColor: "bg-red-500/10 hover:bg-red-500/20",
-    available: true,
-  },
-  {
-    id: "maintenance",
-    name: "Maintenance Request",
-    description: "Submit equipment maintenance and repair requests",
-    icon: Wrench,
-    color: "text-blue-500",
-    bgColor: "bg-blue-500/10 hover:bg-blue-500/20",
-    available: false,
-  },
-  {
-    id: "checklists",
-    name: "Checklists",
-    description: "Complete shift, safety, quality, and maintenance checklists",
-    icon: ClipboardCheck,
-    color: "text-green-500",
-    bgColor: "bg-green-500/10 hover:bg-green-500/20",
-    available: true,
-  },
-  {
-    id: "quality",
-    name: "Quality",
-    description: "Fill quality inspection documents for shipments",
-    icon: FileCheck,
-    color: "text-purple-500",
-    bgColor: "bg-purple-500/10 hover:bg-purple-500/20",
-    available: true,
-  },
-  {
-    id: "shipments",
-    name: "Shipments",
-    description: "Track incoming and outgoing shipments",
-    icon: Package,
-    color: "text-indigo-500",
-    bgColor: "bg-indigo-500/10 hover:bg-indigo-500/20",
-    available: true,
-  },
-  {
-    id: "downtime",
-    name: "Downtime Tracker",
-    description: "Log and monitor production downtime events",
-    icon: Clock,
-    color: "text-amber-500",
-    bgColor: "bg-amber-500/10 hover:bg-amber-500/20",
-    available: false,
-  },
-  {
-    id: "shift-handover",
-    name: "Shift Handover",
-    description: "Document shift handover notes and updates",
-    icon: FileText,
-    color: "text-cyan-500",
-    bgColor: "bg-cyan-500/10 hover:bg-cyan-500/20",
-    available: false,
-  },
-];
-
-const roleDashboards: Record<string, { href: string; label: string; icon: typeof Shield }> = {
-  admin: { href: "/admin", label: "Admin", icon: Shield },
-  owner: { href: "/admin", label: "Admin", icon: Shield },
-  lab_tech: { href: "/lab", label: "Lab", icon: FlaskConical },
-  engineer: { href: "/view", label: "View", icon: Eye },
-  shipping: { href: "/shipments", label: "Shipments", icon: Package },
-  worker: { href: "/quality", label: "Quality", icon: FileCheck },
+const roleRedirects: Record<string, string> = {
+  admin: "/admin",
+  owner: "/admin",
+  lab_tech: "/lab",
+  engineer: "/view",
+  shipping: "/shipments",
+  worker: "/quality",
 };
 
-export default function Home() {
+function HomeContent() {
   const router = useRouter();
-  const [incidentDialogOpen, setIncidentDialogOpen] = useState(false);
-  const [userRole, setUserRole] = useState<string | null>(null);
+  const searchParams = useSearchParams();
+  const from = searchParams.get("from");
 
+  const [username, setUsername] = useState("");
+  const [password, setPassword] = useState("");
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [checkingAuth, setCheckingAuth] = useState(true);
+
+  // Check if already authenticated
   useEffect(() => {
     fetch("/api/auth")
       .then((res) => {
@@ -96,113 +37,125 @@ export default function Home() {
         return null;
       })
       .then((data) => {
-        if (data?.authenticated) setUserRole(data.role);
+        if (data?.authenticated) {
+          // User is authenticated, redirect to their dashboard
+          const target = from || roleRedirects[data.role] || "/admin";
+          router.push(target);
+        } else {
+          setCheckingAuth(false);
+        }
       })
-      .catch(() => {});
-  }, []);
+      .catch(() => {
+        setCheckingAuth(false);
+      });
+  }, [router, from]);
 
-  const handleToolClick = (toolId: string) => {
-    if (toolId === "incident-report") {
-      setIncidentDialogOpen(true);
-    } else if (toolId === "checklists") {
-      router.push("/checklists");
-    } else if (toolId === "quality") {
-      router.push("/quality");
-    } else if (toolId === "shipments") {
-      router.push("/shipments");
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError("");
+    setLoading(true);
+
+    try {
+      const res = await fetch("/api/auth", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ username, password }),
+      });
+
+      if (!res.ok) {
+        setError("Invalid username or password");
+        return;
+      }
+
+      const data = await res.json();
+      const target = from || roleRedirects[data.role] || "/admin";
+      router.push(target);
+      router.refresh();
+    } catch {
+      setError("Something went wrong. Please try again.");
+    } finally {
+      setLoading(false);
     }
   };
 
+  if (checkingAuth) {
+    return (
+      <div className="flex items-center justify-center">
+        <Loader2 className="animate-spin text-muted-foreground" size={32} />
+      </div>
+    );
+  }
+
   return (
-    <div className="min-h-screen bg-background">
-      {/* Header */}
-      <header className="border-b border-border bg-card sticky top-0 z-10">
-        <div className="max-w-5xl mx-auto px-4 py-4 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-lg bg-orange-500 flex items-center justify-center">
-              <span className="text-white font-bold text-lg">P</span>
-            </div>
-            <div>
-              <h1 className="text-xl font-bold tracking-tight">PlantOps</h1>
-              <p className="text-xs text-muted-foreground">Manufacturing Operations Suite</p>
-            </div>
+    <Card className="w-full max-w-sm">
+      <CardHeader className="text-center space-y-3">
+        <div className="mx-auto w-14 h-14 rounded-xl bg-orange-500 flex items-center justify-center">
+          <Lock className="text-white" size={28} />
+        </div>
+        <CardTitle className="text-xl">PlantOps Login</CardTitle>
+        <p className="text-sm text-muted-foreground">
+          Sign in to access your dashboard
+        </p>
+      </CardHeader>
+      <CardContent>
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div className="space-y-2">
+            <Label htmlFor="username">Username</Label>
+            <Input
+              id="username"
+              type="text"
+              placeholder="Enter username"
+              value={username}
+              onChange={(e) => setUsername(e.target.value)}
+              required
+              autoFocus
+            />
           </div>
-          <div className="flex items-center gap-1">
-            <ThemeToggle />
-            {userRole && roleDashboards[userRole] ? (() => {
-              const dash = roleDashboards[userRole];
-              const DashIcon = dash.icon;
-              return (
-                <Link href={dash.href}>
-                  <Button variant="outline" size="sm">
-                    <DashIcon size={14} className="mr-2" />
-                    {dash.label}
-                  </Button>
-                </Link>
-              );
-            })() : (
-              <Link href="/login">
-                <Button variant="outline" size="sm">
-                  <LogIn size={14} className="mr-2" />
-                  Login
-                </Button>
-              </Link>
+          <div className="space-y-2">
+            <Label htmlFor="password">Password</Label>
+            <Input
+              id="password"
+              type="password"
+              placeholder="Enter password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              required
+            />
+          </div>
+
+          {error && (
+            <p className="text-sm text-red-500 text-center">{error}</p>
+          )}
+
+          <Button type="submit" className="w-full" disabled={loading}>
+            {loading ? (
+              <>
+                <Loader2 className="mr-2 animate-spin" size={16} />
+                Signing in...
+              </>
+            ) : (
+              "Sign In"
             )}
-          </div>
-        </div>
-      </header>
+          </Button>
+        </form>
+      </CardContent>
+    </Card>
+  );
+}
 
-      {/* Main Content */}
-      <main className="max-w-5xl mx-auto px-4 py-8">
-        <div className="mb-8">
-          <h2 className="text-2xl font-semibold mb-1">Tools</h2>
-          <p className="text-muted-foreground">Select a tool to get started</p>
+export default function HomePage() {
+  return (
+    <div className="min-h-screen bg-background flex items-center justify-center px-4">
+      <div className="fixed top-4 right-4">
+        <ThemeToggle />
+      </div>
+      <Suspense fallback={
+        <div className="flex items-center justify-center">
+          <Loader2 className="animate-spin text-muted-foreground" size={32} />
         </div>
-
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {tools.map((tool) => {
-            const Icon = tool.icon;
-            return (
-              <Card
-                key={tool.id}
-                className={`cursor-pointer transition-all duration-200 border-border ${
-                  tool.available
-                    ? `${tool.bgColor} border-2`
-                    : "opacity-50 cursor-not-allowed"
-                }`}
-                onClick={() => tool.available && handleToolClick(tool.id)}
-              >
-                <CardContent className="p-6">
-                  <div className="flex items-start gap-4">
-                    <div className={`${tool.color} mt-1`}>
-                      <Icon size={28} />
-                    </div>
-                    <div className="flex-1">
-                      <div className="flex items-center gap-2 mb-1">
-                        <h3 className="font-semibold">{tool.name}</h3>
-                        {!tool.available && (
-                          <span className="text-[10px] uppercase tracking-wider text-muted-foreground bg-muted px-1.5 py-0.5 rounded">
-                            Coming Soon
-                          </span>
-                        )}
-                      </div>
-                      <p className="text-sm text-muted-foreground">
-                        {tool.description}
-                      </p>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            );
-          })}
-        </div>
-      </main>
-
-      {/* Incident Report Dialog */}
-      <IncidentReportDialog
-        open={incidentDialogOpen}
-        onOpenChange={setIncidentDialogOpen}
-      />
+      }>
+        <HomeContent />
+      </Suspense>
     </div>
   );
 }

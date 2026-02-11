@@ -30,7 +30,7 @@ export async function middleware(request: NextRequest) {
   const payload = session ? await verifySessionToken(session) : null;
 
   if (!payload) {
-    const loginUrl = new URL("/login", request.url);
+    const loginUrl = new URL("/", request.url);
     loginUrl.searchParams.set("from", pathname);
     return NextResponse.redirect(loginUrl);
   }
