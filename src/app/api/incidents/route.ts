@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { incidentReportSchema } from "@/lib/schemas";
 import { dbIncidents } from "@/lib/db";
 import { v4 as uuidv4 } from "uuid";
+import { verifySessionToken } from "@/lib/auth";
 
 function generateTicketId(): string {
   const prefix = "INC";
@@ -64,8 +65,24 @@ export async function POST(request: NextRequest) {
   }
 }
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
+    // Verify authentication
+    const sessionCookie = request.cookies.get("plantops_session");
+    if (!sessionCookie) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const payload = await verifySessionToken(sessionCookie.value);
+    if (!payload) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    // Check role - only admin or owner can view all incidents
+    if (!["admin", "owner"].includes(payload.role)) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+
     const sorted = await dbIncidents.getAll();
     return NextResponse.json(sorted);
   } catch (error) {

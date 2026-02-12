@@ -13,6 +13,22 @@ function generateSubmissionId(): string {
 
 export async function GET(request: NextRequest) {
   try {
+    // Verify authentication
+    const sessionCookie = request.cookies.get("plantops_session");
+    if (!sessionCookie) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const payload = await verifySessionToken(sessionCookie.value);
+    if (!payload) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    // Check role - workers can view submissions, admins can view all
+    if (!["worker", "admin", "owner"].includes(payload.role)) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+
     const { searchParams } = new URL(request.url);
     const type = searchParams.get("type") || undefined;
     const shift = searchParams.get("shift") || undefined;

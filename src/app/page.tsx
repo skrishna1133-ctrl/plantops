@@ -49,7 +49,7 @@ const tools = [
     color: "text-purple-500",
     bgColor: "bg-purple-500/10 hover:bg-purple-500/20",
     available: true,
-    requiredRoles: ["worker", "admin", "owner"] as UserRole[],
+    requiredRoles: ["worker", "lab_tech", "admin", "owner"] as UserRole[],
   },
   {
     id: "shipments",
