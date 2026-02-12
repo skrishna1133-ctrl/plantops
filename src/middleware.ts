@@ -4,7 +4,7 @@ import type { UserRole } from "@/lib/schemas";
 
 const routeRoles: Record<string, UserRole[]> = {
   "/admin": ["admin", "owner"],
-  "/lab": ["lab_tech", "admin", "owner"],
+  "/lab": ["quality_tech", "admin", "owner"],
   "/view": ["engineer", "admin", "owner"],
   "/shipments": ["shipping", "admin", "owner"],
   "/checklists": ["worker", "admin", "owner"],
@@ -39,7 +39,7 @@ export async function middleware(request: NextRequest) {
   if (!allowedRoles.includes(payload.role)) {
     const redirectMap: Record<string, string> = {
       worker: "/quality",
-      lab_tech: "/lab",
+      quality_tech: "/lab",
       engineer: "/view",
       shipping: "/shipments",
       admin: "/admin",

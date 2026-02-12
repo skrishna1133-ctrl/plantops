@@ -49,7 +49,7 @@ const tools = [
     color: "text-purple-500",
     bgColor: "bg-purple-500/10 hover:bg-purple-500/20",
     available: true,
-    requiredRoles: ["worker", "lab_tech", "admin", "owner"] as UserRole[],
+    requiredRoles: ["worker", "quality_tech", "admin", "owner"] as UserRole[],
   },
   {
     id: "shipments",
@@ -86,7 +86,7 @@ const tools = [
 const roleDashboards: Record<string, { href: string; label: string; icon: typeof Shield }> = {
   admin: { href: "/admin", label: "Admin", icon: Shield },
   owner: { href: "/admin", label: "Admin", icon: Shield },
-  lab_tech: { href: "/lab", label: "Lab", icon: FlaskConical },
+  quality_tech: { href: "/lab", label: "Quality Tech", icon: FlaskConical },
   engineer: { href: "/view", label: "View", icon: Eye },
   shipping: { href: "/shipments", label: "Shipments", icon: Package },
   worker: { href: "/quality", label: "Quality", icon: FileCheck },

@@ -24,8 +24,8 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    // Check role - must be worker, lab_tech, admin, or owner
-    if (!["worker", "lab_tech", "admin", "owner"].includes(payload.role)) {
+    // Check role - must be worker, quality_tech, admin, or owner
+    if (!["worker", "quality_tech", "admin", "owner"].includes(payload.role)) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
@@ -42,6 +42,22 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
+    // Verify authentication
+    const sessionCookie = request.cookies.get("plantops_session");
+    if (!sessionCookie) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const payload = await verifySessionToken(sessionCookie.value);
+    if (!payload) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    // Check role - only quality_tech (quality_tech), admin, or owner can create quality documents
+    if (!["quality_tech", "admin", "owner"].includes(payload.role)) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+
     const body = await request.json();
     const { poNumber, materialCode, customerName, customerPo, tareWeight, rowCount } = body;
 

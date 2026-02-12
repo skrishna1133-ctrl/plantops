@@ -141,7 +141,7 @@ export interface QualityDocument {
 
 export const userRoles = [
   "worker",
-  "lab_tech",
+  "quality_tech",
   "engineer",
   "shipping",
   "admin",
@@ -152,7 +152,7 @@ export type UserRole = (typeof userRoles)[number];
 
 export const userRoleLabels: Record<UserRole, string> = {
   worker: "Worker",
-  lab_tech: "Lab Tech",
+  quality_tech: "Quality Tech",
   engineer: "Engineer",
   shipping: "Shipping",
   admin: "Admin",
