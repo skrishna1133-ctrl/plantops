@@ -5,8 +5,7 @@ import { useRouter } from "next/navigation";
 import {
   AlertTriangle,
   LogOut,
-  FileCheck,
-  BarChart3,
+  ClipboardList,
   FlaskConical,
   Filter,
   Eye,
@@ -41,10 +40,8 @@ import {
 } from "@/components/ui/dialog";
 import { Separator } from "@/components/ui/separator";
 import type { IncidentReport } from "@/lib/schemas";
-import ChecklistSubmissionsTab from "@/components/admin/checklist-submissions-tab";
-import ChecklistReportsTab from "@/components/admin/checklist-reports-tab";
+import ChecklistsTab from "@/components/admin/checklists-tab";
 import QualityDocumentsTab from "@/components/admin/quality-documents-tab";
-
 import ShipmentsTab from "@/components/admin/shipments-tab";
 import { ThemeToggle } from "@/components/theme-toggle";
 
@@ -78,7 +75,7 @@ const plantLabels: Record<string, string> = {
   "plant-b": "Plant B",
 };
 
-type ViewTab = "incidents" | "submissions" | "reports" | "quality" | "shipments";
+type ViewTab = "incidents" | "checklists" | "quality" | "shipments";
 
 export default function EngineerViewPage() {
   const [activeTab, setActiveTab] = useState<ViewTab>("incidents");
@@ -165,8 +162,7 @@ export default function EngineerViewPage() {
           <nav className="flex gap-1">
             {([
               { id: "incidents" as ViewTab, label: "Incidents", icon: AlertTriangle },
-              { id: "submissions" as ViewTab, label: "Submissions", icon: FileCheck },
-              { id: "reports" as ViewTab, label: "Reports", icon: BarChart3 },
+              { id: "checklists" as ViewTab, label: "Checklists", icon: ClipboardList },
               { id: "quality" as ViewTab, label: "Quality", icon: FlaskConical },
               { id: "shipments" as ViewTab, label: "Shipments", icon: Package },
             ]).map((tab) => (
@@ -188,8 +184,7 @@ export default function EngineerViewPage() {
       </div>
 
       <main className="max-w-7xl mx-auto px-4 py-6 space-y-6">
-        {activeTab === "submissions" && <ChecklistSubmissionsTab readOnly />}
-        {activeTab === "reports" && <ChecklistReportsTab />}
+        {activeTab === "checklists" && <ChecklistsTab readOnly />}
         {activeTab === "quality" && <QualityDocumentsTab readOnly />}
         {activeTab === "shipments" && <ShipmentsTab readOnly />}
 

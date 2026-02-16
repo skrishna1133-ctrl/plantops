@@ -24,6 +24,7 @@ import type { QualityDocument, QualityDocumentV2 } from "@/lib/schemas";
 import QualityDocDialog from "./quality-doc-dialog";
 import QualityDocDetailDialog from "./quality-doc-detail-dialog";
 import CreateQualityDocV2Dialog from "./create-quality-doc-v2-dialog";
+import QualityTemplatesTab from "./quality-templates-tab";
 
 const LEGACY_TITLE = "Bulk Density & Metal Contamination Report";
 
@@ -52,7 +53,10 @@ type UnifiedDoc = {
   legacy?: QualityDocument;
 };
 
+type QualitySubTab = "documents" | "templates";
+
 export default function QualityDocumentsTab({ readOnly = false }: { readOnly?: boolean }) {
+  const [subTab, setSubTab] = useState<QualitySubTab>("documents");
   const [legacyDocs, setLegacyDocs] = useState<QualityDocument[]>([]);
   const [v2Docs, setV2Docs] = useState<QualityDocumentV2[]>([]);
   const [loading, setLoading] = useState(true);
@@ -127,8 +131,35 @@ export default function QualityDocumentsTab({ readOnly = false }: { readOnly?: b
     })),
   ].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
 
+  if (subTab === "templates" && !readOnly) {
+    return (
+      <div className="space-y-4">
+        <div className="flex gap-1 border-b border-border pb-2">
+          <Button variant="ghost" size="sm" onClick={() => setSubTab("documents")}>
+            Documents
+          </Button>
+          <Button variant="default" size="sm" onClick={() => setSubTab("templates")}>
+            Templates
+          </Button>
+        </div>
+        <QualityTemplatesTab />
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-4">
+      {!readOnly && (
+        <div className="flex gap-1 border-b border-border pb-2">
+          <Button variant={subTab === "documents" ? "default" : "ghost"} size="sm" onClick={() => setSubTab("documents")}>
+            Documents
+          </Button>
+          <Button variant={subTab === "templates" ? "default" : "ghost"} size="sm" onClick={() => setSubTab("templates")}>
+            Templates
+          </Button>
+        </div>
+      )}
+
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
           <Select value={filterStatus} onValueChange={setFilterStatus}>

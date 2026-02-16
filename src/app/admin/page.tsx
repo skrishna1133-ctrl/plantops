@@ -13,12 +13,9 @@ import {
   ImageIcon,
   X,
   ClipboardList,
-  FileCheck,
-  BarChart3,
   FlaskConical,
   Users,
   Package,
-  LayoutList,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -47,14 +44,10 @@ import {
 } from "@/components/ui/dialog";
 import { Separator } from "@/components/ui/separator";
 import type { IncidentReport } from "@/lib/schemas";
-import ChecklistTemplatesTab from "@/components/admin/checklist-templates-tab";
-import ChecklistSubmissionsTab from "@/components/admin/checklist-submissions-tab";
-import ChecklistReportsTab from "@/components/admin/checklist-reports-tab";
+import ChecklistsTab from "@/components/admin/checklists-tab";
 import QualityDocumentsTab from "@/components/admin/quality-documents-tab";
-
 import UsersTab from "@/components/admin/users-tab";
 import ShipmentsTab from "@/components/admin/shipments-tab";
-import QualityTemplatesTab from "@/components/admin/quality-templates-tab";
 import { ThemeToggle } from "@/components/theme-toggle";
 
 const criticalityColors: Record<string, string> = {
@@ -87,7 +80,7 @@ const plantLabels: Record<string, string> = {
   "plant-b": "Plant B",
 };
 
-type AdminTab = "incidents" | "templates" | "submissions" | "reports" | "quality" | "quality-templates" | "users" | "shipments";
+type AdminTab = "incidents" | "checklists" | "quality" | "users" | "shipments";
 
 export default function AdminPage() {
   const [activeTab, setActiveTab] = useState<AdminTab>("incidents");
@@ -240,11 +233,8 @@ export default function AdminPage() {
           <nav className="flex gap-1">
             {([
               { id: "incidents" as AdminTab, label: "Incidents", icon: AlertTriangle },
-              { id: "templates" as AdminTab, label: "Templates", icon: ClipboardList },
-              { id: "submissions" as AdminTab, label: "Submissions", icon: FileCheck },
-              { id: "reports" as AdminTab, label: "Reports", icon: BarChart3 },
+              { id: "checklists" as AdminTab, label: "Checklists", icon: ClipboardList },
               { id: "quality" as AdminTab, label: "Quality", icon: FlaskConical },
-              { id: "quality-templates" as AdminTab, label: "Q. Templates", icon: LayoutList },
               { id: "users" as AdminTab, label: "Users", icon: Users },
               { id: "shipments" as AdminTab, label: "Shipments", icon: Package },
             ]).map((tab) => (
@@ -266,20 +256,11 @@ export default function AdminPage() {
       </div>
 
       <main className="max-w-7xl mx-auto px-4 py-6 space-y-6">
-        {/* Templates Tab */}
-        {activeTab === "templates" && <ChecklistTemplatesTab />}
-
-        {/* Submissions Tab */}
-        {activeTab === "submissions" && <ChecklistSubmissionsTab />}
-
-        {/* Reports Tab */}
-        {activeTab === "reports" && <ChecklistReportsTab />}
+        {/* Checklists Tab */}
+        {activeTab === "checklists" && <ChecklistsTab />}
 
         {/* Quality Tab */}
         {activeTab === "quality" && <QualityDocumentsTab />}
-
-        {/* Quality Templates Tab */}
-        {activeTab === "quality-templates" && <QualityTemplatesTab />}
 
         {/* Users Tab */}
         {activeTab === "users" && <UsersTab />}
