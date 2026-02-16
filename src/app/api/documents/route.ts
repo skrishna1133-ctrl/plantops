@@ -5,7 +5,7 @@ import { verifySessionToken } from "@/lib/auth";
 import crypto from "crypto";
 import type { UserRole } from "@/lib/schemas";
 
-const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
+const MAX_FILE_SIZE = 50 * 1024 * 1024; // 50MB
 
 export async function GET(request: NextRequest) {
   try {
@@ -79,7 +79,7 @@ export async function POST(request: NextRequest) {
 
     // Validate file size
     if (file.size > MAX_FILE_SIZE) {
-      return NextResponse.json({ error: "File size must be under 10MB" }, { status: 400 });
+      return NextResponse.json({ error: "File size must be under 50MB" }, { status: 400 });
     }
 
     // Validate folder exists

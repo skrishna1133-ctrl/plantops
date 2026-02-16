@@ -22,7 +22,7 @@ import {
 import type { DocumentFolder, UserRole } from "@/lib/schemas";
 import { userRoles, userRoleLabels } from "@/lib/schemas";
 
-const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
+const MAX_FILE_SIZE = 50 * 1024 * 1024; // 50MB
 const assignableRoles: UserRole[] = ["worker", "quality_tech", "engineer", "shipping"];
 
 interface UploadDocumentDialogProps {
@@ -80,7 +80,7 @@ export default function UploadDocumentDialog({
       return;
     }
     if (f.size > MAX_FILE_SIZE) {
-      setError("File size must be under 10MB");
+      setError("File size must be under 50MB");
       return;
     }
     setError("");
@@ -181,7 +181,7 @@ export default function UploadDocumentDialog({
               >
                 <Upload size={24} className="mx-auto mb-2 text-muted-foreground" />
                 <p className="text-sm text-muted-foreground">Click to select a PDF file</p>
-                <p className="text-xs text-muted-foreground mt-1">Max 10MB</p>
+                <p className="text-xs text-muted-foreground mt-1">Max 50MB</p>
               </div>
             )}
             <input
