@@ -18,6 +18,7 @@ import {
   FlaskConical,
   Users,
   Package,
+  LayoutList,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -50,8 +51,10 @@ import ChecklistTemplatesTab from "@/components/admin/checklist-templates-tab";
 import ChecklistSubmissionsTab from "@/components/admin/checklist-submissions-tab";
 import ChecklistReportsTab from "@/components/admin/checklist-reports-tab";
 import QualityDocumentsTab from "@/components/admin/quality-documents-tab";
+import QualityDocumentsV2Tab from "@/components/admin/quality-documents-v2-tab";
 import UsersTab from "@/components/admin/users-tab";
 import ShipmentsTab from "@/components/admin/shipments-tab";
+import QualityTemplatesTab from "@/components/admin/quality-templates-tab";
 import { ThemeToggle } from "@/components/theme-toggle";
 
 const criticalityColors: Record<string, string> = {
@@ -84,7 +87,7 @@ const plantLabels: Record<string, string> = {
   "plant-b": "Plant B",
 };
 
-type AdminTab = "incidents" | "templates" | "submissions" | "reports" | "quality" | "users" | "shipments";
+type AdminTab = "incidents" | "templates" | "submissions" | "reports" | "quality" | "quality-v2" | "quality-templates" | "users" | "shipments";
 
 export default function AdminPage() {
   const [activeTab, setActiveTab] = useState<AdminTab>("incidents");
@@ -241,6 +244,8 @@ export default function AdminPage() {
               { id: "submissions" as AdminTab, label: "Submissions", icon: FileCheck },
               { id: "reports" as AdminTab, label: "Reports", icon: BarChart3 },
               { id: "quality" as AdminTab, label: "Quality", icon: FlaskConical },
+              { id: "quality-v2" as AdminTab, label: "Quality V2", icon: FileCheck },
+              { id: "quality-templates" as AdminTab, label: "Q. Templates", icon: LayoutList },
               { id: "users" as AdminTab, label: "Users", icon: Users },
               { id: "shipments" as AdminTab, label: "Shipments", icon: Package },
             ]).map((tab) => (
@@ -273,6 +278,12 @@ export default function AdminPage() {
 
         {/* Quality Tab */}
         {activeTab === "quality" && <QualityDocumentsTab />}
+
+        {/* Quality V2 Tab */}
+        {activeTab === "quality-v2" && <QualityDocumentsV2Tab />}
+
+        {/* Quality Templates Tab */}
+        {activeTab === "quality-templates" && <QualityTemplatesTab />}
 
         {/* Users Tab */}
         {activeTab === "users" && <UsersTab />}

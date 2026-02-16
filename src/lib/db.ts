@@ -9,6 +9,13 @@ import type {
   Shipment,
   ShipmentStatus,
   ShipmentType,
+  QualityTemplate,
+  QualityDocumentV2,
+  QualityTemplateField,
+  QualityFieldValue,
+  QualityDocRowV2,
+  DocumentFolder,
+  InstructionDocument,
 } from "./schemas";
 import { getFlags } from "./flags";
 
@@ -106,6 +113,73 @@ async function initTables() {
       person_name VARCHAR(100),
       rows JSONB NOT NULL DEFAULT '[]',
       status VARCHAR(20) DEFAULT 'draft',
+      created_at VARCHAR(50) NOT NULL,
+      updated_at VARCHAR(50) NOT NULL
+    )
+  `;
+
+  await sql`
+    CREATE TABLE IF NOT EXISTS quality_templates (
+      id UUID PRIMARY KEY,
+      template_id VARCHAR(20) NOT NULL UNIQUE,
+      title VARCHAR(200) NOT NULL,
+      description TEXT,
+      header_fields JSONB NOT NULL DEFAULT '[]',
+      row_fields JSONB NOT NULL DEFAULT '[]',
+      active BOOLEAN DEFAULT true,
+      default_row_count INT DEFAULT 1,
+      min_row_count INT,
+      max_row_count INT,
+      tenant_id VARCHAR(50),
+      created_at VARCHAR(50) NOT NULL,
+      updated_at VARCHAR(50) NOT NULL
+    )
+  `;
+
+  await sql`
+    CREATE TABLE IF NOT EXISTS quality_documents_v2 (
+      id UUID PRIMARY KEY,
+      doc_id VARCHAR(20) NOT NULL UNIQUE,
+      template_id UUID NOT NULL,
+      template_title VARCHAR(200) NOT NULL,
+      header_values JSONB NOT NULL DEFAULT '[]',
+      rows JSONB NOT NULL DEFAULT '[]',
+      row_count INT NOT NULL,
+      status VARCHAR(20) DEFAULT 'draft',
+      worker_name VARCHAR(100),
+      quality_tech_name VARCHAR(100),
+      tenant_id VARCHAR(50),
+      created_at VARCHAR(50) NOT NULL,
+      updated_at VARCHAR(50) NOT NULL,
+      worker_filled_at VARCHAR(50),
+      completed_at VARCHAR(50)
+    )
+  `;
+
+  await sql`
+    CREATE TABLE IF NOT EXISTS document_folders (
+      id UUID PRIMARY KEY,
+      name VARCHAR(200) NOT NULL,
+      description TEXT,
+      created_at VARCHAR(50) NOT NULL
+    )
+  `;
+
+  await sql`
+    CREATE TABLE IF NOT EXISTS instruction_documents (
+      id UUID PRIMARY KEY,
+      folder_id UUID NOT NULL,
+      folder_name VARCHAR(200) NOT NULL,
+      title VARCHAR(300) NOT NULL,
+      description TEXT,
+      file_name VARCHAR(500) NOT NULL,
+      file_url TEXT NOT NULL,
+      file_size INT NOT NULL,
+      previous_file_url TEXT,
+      previous_file_name VARCHAR(500),
+      allowed_roles JSONB NOT NULL DEFAULT '[]',
+      uploaded_by VARCHAR(100) NOT NULL,
+      uploaded_by_user_id VARCHAR(50) NOT NULL,
       created_at VARCHAR(50) NOT NULL,
       updated_at VARCHAR(50) NOT NULL
     )
@@ -611,3 +685,364 @@ function mapQualityDoc(row: Record<string, unknown>): QualityDocument {
   };
 }
 
+// ─── Quality Templates ───
+
+export const dbQualityTemplates = {
+  async getAll(filters?: { active?: boolean; tenantId?: string }): Promise<QualityTemplate[]> {
+    await initTables();
+    if (filters?.active !== undefined && filters?.tenantId) {
+      const { rows } = await sql`
+        SELECT * FROM quality_templates WHERE active = ${filters.active} AND tenant_id = ${filters.tenantId} ORDER BY created_at DESC
+      `;
+      return rows.map(mapQualityTemplate);
+    }
+    if (filters?.active !== undefined) {
+      const { rows } = await sql`
+        SELECT * FROM quality_templates WHERE active = ${filters.active} ORDER BY created_at DESC
+      `;
+      return rows.map(mapQualityTemplate);
+    }
+    if (filters?.tenantId) {
+      const { rows } = await sql`
+        SELECT * FROM quality_templates WHERE tenant_id = ${filters.tenantId} ORDER BY created_at DESC
+      `;
+      return rows.map(mapQualityTemplate);
+    }
+    const { rows } = await sql`
+      SELECT * FROM quality_templates ORDER BY created_at DESC
+    `;
+    return rows.map(mapQualityTemplate);
+  },
+
+  async getById(id: string): Promise<QualityTemplate | null> {
+    await initTables();
+    const { rows } = await sql`
+      SELECT * FROM quality_templates WHERE id = ${id}
+    `;
+    return rows.length > 0 ? mapQualityTemplate(rows[0]) : null;
+  },
+
+  async create(template: QualityTemplate): Promise<void> {
+    await initTables();
+    await sql`
+      INSERT INTO quality_templates (id, template_id, title, description, header_fields, row_fields, active, default_row_count, min_row_count, max_row_count, tenant_id, created_at, updated_at)
+      VALUES (${template.id}, ${template.templateId}, ${template.title}, ${template.description || null}, ${JSON.stringify(template.headerFields)}, ${JSON.stringify(template.rowFields)}, ${template.active}, ${template.defaultRowCount}, ${template.minRowCount ?? null}, ${template.maxRowCount ?? null}, ${template.tenantId ?? null}, ${template.createdAt}, ${template.updatedAt})
+    `;
+  },
+
+  async update(id: string, data: Partial<QualityTemplate>): Promise<boolean> {
+    await initTables();
+    const now = new Date().toISOString();
+    if (data.active !== undefined) {
+      const { rowCount } = await sql`
+        UPDATE quality_templates SET active = ${data.active}, updated_at = ${now} WHERE id = ${id}
+      `;
+      return (rowCount ?? 0) > 0;
+    }
+    if (data.title) {
+      const { rowCount } = await sql`
+        UPDATE quality_templates SET title = ${data.title}, updated_at = ${now} WHERE id = ${id}
+      `;
+      return (rowCount ?? 0) > 0;
+    }
+    return false;
+  },
+
+  async delete(id: string): Promise<boolean> {
+    await initTables();
+    const { rowCount } = await sql`
+      DELETE FROM quality_templates WHERE id = ${id}
+    `;
+    return (rowCount ?? 0) > 0;
+  },
+};
+
+function mapQualityTemplate(row: Record<string, unknown>): QualityTemplate {
+  return {
+    id: row.id as string,
+    templateId: row.template_id as string,
+    title: row.title as string,
+    description: (row.description as string) || undefined,
+    headerFields: (typeof row.header_fields === "string" ? JSON.parse(row.header_fields as string) : row.header_fields) as QualityTemplateField[],
+    rowFields: (typeof row.row_fields === "string" ? JSON.parse(row.row_fields as string) : row.row_fields) as QualityTemplateField[],
+    active: row.active as boolean,
+    defaultRowCount: row.default_row_count as number,
+    minRowCount: (row.min_row_count as number) || undefined,
+    maxRowCount: (row.max_row_count as number) || undefined,
+    tenantId: (row.tenant_id as string) || undefined,
+    createdAt: row.created_at as string,
+    updatedAt: row.updated_at as string,
+  };
+}
+
+// ─── Quality Documents V2 ───
+
+export const dbQualityDocsV2 = {
+  async getAll(filters?: { status?: string; templateId?: string; tenantId?: string }): Promise<QualityDocumentV2[]> {
+    await initTables();
+    if (filters?.status && filters?.templateId) {
+      const { rows } = await sql`
+        SELECT * FROM quality_documents_v2 WHERE status = ${filters.status} AND template_id = ${filters.templateId} ORDER BY created_at DESC
+      `;
+      return rows.map(mapQualityDocV2);
+    }
+    if (filters?.status) {
+      const { rows } = await sql`
+        SELECT * FROM quality_documents_v2 WHERE status = ${filters.status} ORDER BY created_at DESC
+      `;
+      return rows.map(mapQualityDocV2);
+    }
+    if (filters?.templateId) {
+      const { rows } = await sql`
+        SELECT * FROM quality_documents_v2 WHERE template_id = ${filters.templateId} ORDER BY created_at DESC
+      `;
+      return rows.map(mapQualityDocV2);
+    }
+    const { rows } = await sql`
+      SELECT * FROM quality_documents_v2 ORDER BY created_at DESC
+    `;
+    return rows.map(mapQualityDocV2);
+  },
+
+  async getById(id: string): Promise<QualityDocumentV2 | null> {
+    await initTables();
+    const { rows } = await sql`
+      SELECT * FROM quality_documents_v2 WHERE id = ${id}
+    `;
+    return rows.length > 0 ? mapQualityDocV2(rows[0]) : null;
+  },
+
+  async create(doc: QualityDocumentV2): Promise<void> {
+    await initTables();
+    await sql`
+      INSERT INTO quality_documents_v2 (id, doc_id, template_id, template_title, header_values, rows, row_count, status, worker_name, quality_tech_name, tenant_id, created_at, updated_at, worker_filled_at, completed_at)
+      VALUES (${doc.id}, ${doc.docId}, ${doc.templateId}, ${doc.templateTitle}, ${JSON.stringify(doc.headerValues)}, ${JSON.stringify(doc.rows)}, ${doc.rowCount}, ${doc.status}, ${doc.workerName || null}, ${doc.qualityTechName || null}, ${doc.tenantId ?? null}, ${doc.createdAt}, ${doc.updatedAt}, ${doc.workerFilledAt || null}, ${doc.completedAt || null})
+    `;
+  },
+
+  async update(id: string, data: Partial<QualityDocumentV2>): Promise<boolean> {
+    await initTables();
+    const now = new Date().toISOString();
+    const existing = await this.getById(id);
+    if (!existing) return false;
+
+    const headerValues = data.headerValues !== undefined ? JSON.stringify(data.headerValues) : JSON.stringify(existing.headerValues);
+    const rows = data.rows !== undefined ? JSON.stringify(data.rows) : JSON.stringify(existing.rows);
+    const status = data.status ?? existing.status;
+    const workerName = data.workerName !== undefined ? data.workerName : existing.workerName;
+    const qualityTechName = data.qualityTechName !== undefined ? data.qualityTechName : existing.qualityTechName;
+    const workerFilledAt = data.workerFilledAt !== undefined ? data.workerFilledAt : existing.workerFilledAt;
+    const completedAt = data.completedAt !== undefined ? data.completedAt : existing.completedAt;
+
+    const { rowCount } = await sql`
+      UPDATE quality_documents_v2
+      SET header_values = ${headerValues}::jsonb,
+          rows = ${rows}::jsonb,
+          status = ${status},
+          worker_name = ${workerName || null},
+          quality_tech_name = ${qualityTechName || null},
+          worker_filled_at = ${workerFilledAt || null},
+          completed_at = ${completedAt || null},
+          updated_at = ${now}
+      WHERE id = ${id}
+    `;
+    return (rowCount ?? 0) > 0;
+  },
+
+  async delete(id: string): Promise<boolean> {
+    await initTables();
+    const { rowCount } = await sql`
+      DELETE FROM quality_documents_v2 WHERE id = ${id}
+    `;
+    return (rowCount ?? 0) > 0;
+  },
+};
+
+function mapQualityDocV2(row: Record<string, unknown>): QualityDocumentV2 {
+  return {
+    id: row.id as string,
+    docId: row.doc_id as string,
+    templateId: row.template_id as string,
+    templateTitle: row.template_title as string,
+    headerValues: (typeof row.header_values === "string" ? JSON.parse(row.header_values as string) : row.header_values) as QualityFieldValue[],
+    rows: (typeof row.rows === "string" ? JSON.parse(row.rows as string) : row.rows) as QualityDocRowV2[],
+    rowCount: row.row_count as number,
+    status: row.status as QualityDocumentV2["status"],
+    workerName: (row.worker_name as string) || undefined,
+    qualityTechName: (row.quality_tech_name as string) || undefined,
+    tenantId: (row.tenant_id as string) || undefined,
+    createdAt: row.created_at as string,
+    updatedAt: row.updated_at as string,
+    workerFilledAt: (row.worker_filled_at as string) || undefined,
+    completedAt: (row.completed_at as string) || undefined,
+  };
+}
+
+// ─── Document Folders ───
+
+export const dbDocumentFolders = {
+  async getAll(): Promise<DocumentFolder[]> {
+    await initTables();
+    const { rows } = await sql`
+      SELECT * FROM document_folders ORDER BY name ASC
+    `;
+    return rows.map(mapDocumentFolder);
+  },
+
+  async getById(id: string): Promise<DocumentFolder | null> {
+    await initTables();
+    const { rows } = await sql`
+      SELECT * FROM document_folders WHERE id = ${id}
+    `;
+    return rows.length > 0 ? mapDocumentFolder(rows[0]) : null;
+  },
+
+  async create(folder: DocumentFolder): Promise<void> {
+    await initTables();
+    await sql`
+      INSERT INTO document_folders (id, name, description, created_at)
+      VALUES (${folder.id}, ${folder.name}, ${folder.description || null}, ${folder.createdAt})
+    `;
+  },
+
+  async update(id: string, data: { name?: string; description?: string }): Promise<boolean> {
+    await initTables();
+    if (data.name) {
+      const { rowCount } = await sql`
+        UPDATE document_folders SET name = ${data.name} WHERE id = ${id}
+      `;
+      // Also update denormalized folder_name in documents
+      await sql`
+        UPDATE instruction_documents SET folder_name = ${data.name} WHERE folder_id = ${id}
+      `;
+      return (rowCount ?? 0) > 0;
+    }
+    return false;
+  },
+
+  async delete(id: string): Promise<boolean> {
+    await initTables();
+    const { rowCount } = await sql`
+      DELETE FROM document_folders WHERE id = ${id}
+    `;
+    return (rowCount ?? 0) > 0;
+  },
+};
+
+function mapDocumentFolder(row: Record<string, unknown>): DocumentFolder {
+  return {
+    id: row.id as string,
+    name: row.name as string,
+    description: (row.description as string) || undefined,
+    createdAt: row.created_at as string,
+  };
+}
+
+// ─── Instruction Documents ───
+
+export const dbInstructionDocuments = {
+  async getAll(filters?: { folderId?: string; role?: string }): Promise<InstructionDocument[]> {
+    await initTables();
+    if (filters?.folderId) {
+      const { rows } = await sql`
+        SELECT * FROM instruction_documents WHERE folder_id = ${filters.folderId} ORDER BY created_at DESC
+      `;
+      const docs = rows.map(mapInstructionDocument);
+      if (filters.role) {
+        return docs.filter((d) => d.allowedRoles.includes(filters.role as UserRole));
+      }
+      return docs;
+    }
+    const { rows } = await sql`
+      SELECT * FROM instruction_documents ORDER BY created_at DESC
+    `;
+    const docs = rows.map(mapInstructionDocument);
+    if (filters?.role) {
+      return docs.filter((d) => d.allowedRoles.includes(filters.role as UserRole));
+    }
+    return docs;
+  },
+
+  async getById(id: string): Promise<InstructionDocument | null> {
+    await initTables();
+    const { rows } = await sql`
+      SELECT * FROM instruction_documents WHERE id = ${id}
+    `;
+    return rows.length > 0 ? mapInstructionDocument(rows[0]) : null;
+  },
+
+  async create(doc: InstructionDocument): Promise<void> {
+    await initTables();
+    await sql`
+      INSERT INTO instruction_documents (id, folder_id, folder_name, title, description, file_name, file_url, file_size, previous_file_url, previous_file_name, allowed_roles, uploaded_by, uploaded_by_user_id, created_at, updated_at)
+      VALUES (${doc.id}, ${doc.folderId}, ${doc.folderName}, ${doc.title}, ${doc.description || null}, ${doc.fileName}, ${doc.fileUrl}, ${doc.fileSize}, ${doc.previousFileUrl || null}, ${doc.previousFileName || null}, ${JSON.stringify(doc.allowedRoles)}::jsonb, ${doc.uploadedBy}, ${doc.uploadedByUserId}, ${doc.createdAt}, ${doc.updatedAt})
+    `;
+  },
+
+  async update(id: string, data: Partial<InstructionDocument>): Promise<boolean> {
+    await initTables();
+    const existing = await this.getById(id);
+    if (!existing) return false;
+
+    const now = new Date().toISOString();
+    const title = data.title ?? existing.title;
+    const description = data.description !== undefined ? data.description : existing.description;
+    const fileName = data.fileName ?? existing.fileName;
+    const fileUrl = data.fileUrl ?? existing.fileUrl;
+    const fileSize = data.fileSize ?? existing.fileSize;
+    const previousFileUrl = data.previousFileUrl !== undefined ? data.previousFileUrl : existing.previousFileUrl;
+    const previousFileName = data.previousFileName !== undefined ? data.previousFileName : existing.previousFileName;
+    const allowedRoles = data.allowedRoles ?? existing.allowedRoles;
+
+    const { rowCount } = await sql`
+      UPDATE instruction_documents SET
+        title = ${title},
+        description = ${description || null},
+        file_name = ${fileName},
+        file_url = ${fileUrl},
+        file_size = ${fileSize},
+        previous_file_url = ${previousFileUrl || null},
+        previous_file_name = ${previousFileName || null},
+        allowed_roles = ${JSON.stringify(allowedRoles)}::jsonb,
+        updated_at = ${now}
+      WHERE id = ${id}
+    `;
+    return (rowCount ?? 0) > 0;
+  },
+
+  async delete(id: string): Promise<boolean> {
+    await initTables();
+    const { rowCount } = await sql`
+      DELETE FROM instruction_documents WHERE id = ${id}
+    `;
+    return (rowCount ?? 0) > 0;
+  },
+
+  async countByFolder(folderId: string): Promise<number> {
+    await initTables();
+    const { rows } = await sql`
+      SELECT COUNT(*) as count FROM instruction_documents WHERE folder_id = ${folderId}
+    `;
+    return Number(rows[0].count);
+  },
+};
+
+function mapInstructionDocument(row: Record<string, unknown>): InstructionDocument {
+  return {
+    id: row.id as string,
+    folderId: row.folder_id as string,
+    folderName: row.folder_name as string,
+    title: row.title as string,
+    description: (row.description as string) || undefined,
+    fileName: row.file_name as string,
+    fileUrl: row.file_url as string,
+    fileSize: row.file_size as number,
+    previousFileUrl: (row.previous_file_url as string) || undefined,
+    previousFileName: (row.previous_file_name as string) || undefined,
+    allowedRoles: (typeof row.allowed_roles === "string" ? JSON.parse(row.allowed_roles as string) : row.allowed_roles) as UserRole[],
+    uploadedBy: row.uploaded_by as string,
+    uploadedByUserId: row.uploaded_by_user_id as string,
+    createdAt: row.created_at as string,
+    updatedAt: row.updated_at as string,
+  };
+}

@@ -13,6 +13,7 @@ import {
   ImageIcon,
   X,
   Package,
+  LayoutList,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -44,6 +45,7 @@ import type { IncidentReport } from "@/lib/schemas";
 import ChecklistSubmissionsTab from "@/components/admin/checklist-submissions-tab";
 import ChecklistReportsTab from "@/components/admin/checklist-reports-tab";
 import QualityDocumentsTab from "@/components/admin/quality-documents-tab";
+import QualityDocumentsV2Tab from "@/components/admin/quality-documents-v2-tab";
 import ShipmentsTab from "@/components/admin/shipments-tab";
 import { ThemeToggle } from "@/components/theme-toggle";
 
@@ -77,7 +79,7 @@ const plantLabels: Record<string, string> = {
   "plant-b": "Plant B",
 };
 
-type ViewTab = "incidents" | "submissions" | "reports" | "quality" | "shipments";
+type ViewTab = "incidents" | "submissions" | "reports" | "quality" | "quality-v2" | "shipments";
 
 export default function EngineerViewPage() {
   const [activeTab, setActiveTab] = useState<ViewTab>("incidents");
@@ -167,6 +169,7 @@ export default function EngineerViewPage() {
               { id: "submissions" as ViewTab, label: "Submissions", icon: FileCheck },
               { id: "reports" as ViewTab, label: "Reports", icon: BarChart3 },
               { id: "quality" as ViewTab, label: "Quality", icon: FlaskConical },
+              { id: "quality-v2" as ViewTab, label: "Quality V2", icon: LayoutList },
               { id: "shipments" as ViewTab, label: "Shipments", icon: Package },
             ]).map((tab) => (
               <button
@@ -190,6 +193,7 @@ export default function EngineerViewPage() {
         {activeTab === "submissions" && <ChecklistSubmissionsTab readOnly />}
         {activeTab === "reports" && <ChecklistReportsTab />}
         {activeTab === "quality" && <QualityDocumentsTab readOnly />}
+        {activeTab === "quality-v2" && <QualityDocumentsV2Tab readOnly />}
         {activeTab === "shipments" && <ShipmentsTab readOnly />}
 
         {activeTab === "incidents" && (

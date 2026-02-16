@@ -137,6 +137,100 @@ export interface QualityDocument {
   updatedAt: string;
 }
 
+// ─── Quality Templates (V2) ───
+
+export const qualityFieldTypes = [
+  "text",
+  "numeric",
+  "checkbox",
+  "pass_fail",
+  "photo",
+  "calculated",
+] as const;
+export type QualityFieldType = (typeof qualityFieldTypes)[number];
+
+export const qualityFieldTypeLabels: Record<QualityFieldType, string> = {
+  text: "Text",
+  numeric: "Numeric",
+  checkbox: "Yes / No",
+  pass_fail: "Pass / Fail",
+  photo: "Photo",
+  calculated: "Calculated",
+};
+
+export const qualityFieldStages = ["worker", "quality_tech"] as const;
+export type QualityFieldStage = (typeof qualityFieldStages)[number];
+
+export interface QualityTemplateField {
+  id: string;
+  label: string;
+  type: QualityFieldType;
+  context: "header" | "row";
+  stage: QualityFieldStage;
+  required: boolean;
+  description?: string;
+  unit?: string;
+  numericMin?: number;
+  numericMax?: number;
+  decimalPlaces?: number;
+  formula?: string;
+  formulaFieldIds?: string[];
+  defaultValue?: string | number | boolean;
+}
+
+export interface QualityTemplate {
+  id: string;
+  templateId: string;
+  title: string;
+  description?: string;
+  headerFields: QualityTemplateField[];
+  rowFields: QualityTemplateField[];
+  active: boolean;
+  defaultRowCount: number;
+  minRowCount?: number;
+  maxRowCount?: number;
+  tenantId?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface QualityFieldValue {
+  fieldId: string;
+  fieldLabel: string;
+  fieldType: QualityFieldType;
+  textValue?: string;
+  numericValue?: number;
+  booleanValue?: boolean;
+  photoUrl?: string;
+  calculatedValue?: number;
+  unit?: string;
+}
+
+export interface QualityDocRowV2 {
+  serialNumber: number;
+  values: QualityFieldValue[];
+}
+
+export type QualityDocStatusV2 = "draft" | "worker_filled" | "complete";
+
+export interface QualityDocumentV2 {
+  id: string;
+  docId: string;
+  templateId: string;
+  templateTitle: string;
+  headerValues: QualityFieldValue[];
+  rows: QualityDocRowV2[];
+  rowCount: number;
+  status: QualityDocStatusV2;
+  workerName?: string;
+  qualityTechName?: string;
+  tenantId?: string;
+  createdAt: string;
+  updatedAt: string;
+  workerFilledAt?: string;
+  completedAt?: string;
+}
+
 // ─── Users ───
 
 export const userRoles = [
@@ -200,6 +294,33 @@ export interface Shipment {
   shipmentDate: string;
   notes?: string;
   status: ShipmentStatus;
+  createdAt: string;
+  updatedAt: string;
+}
+
+// ─── Instructions/Documents ───
+
+export interface DocumentFolder {
+  id: string;
+  name: string;
+  description?: string;
+  createdAt: string;
+}
+
+export interface InstructionDocument {
+  id: string;
+  folderId: string;
+  folderName: string;
+  title: string;
+  description?: string;
+  fileName: string;
+  fileUrl: string;
+  fileSize: number;
+  previousFileUrl?: string;
+  previousFileName?: string;
+  allowedRoles: UserRole[];
+  uploadedBy: string;
+  uploadedByUserId: string;
   createdAt: string;
   updatedAt: string;
 }

@@ -7,9 +7,11 @@ import { Loader2, FlaskConical, ChevronRight, LogOut, Plus } from "lucide-react"
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
-import type { QualityDocument } from "@/lib/schemas";
+import { Separator } from "@/components/ui/separator";
+import type { QualityDocument, QualityDocumentV2 } from "@/lib/schemas";
 import { ThemeToggle } from "@/components/theme-toggle";
 import QualityDocDialog from "@/components/admin/quality-doc-dialog";
+import CreateQualityDocV2Dialog from "@/components/admin/create-quality-doc-v2-dialog";
 
 const statusLabels: Record<string, string> = {
   draft: "Draft",
@@ -25,16 +27,23 @@ const statusColors: Record<string, string> = {
 
 export default function LabDashboard() {
   const [docs, setDocs] = useState<QualityDocument[]>([]);
+  const [v2Docs, setV2Docs] = useState<QualityDocumentV2[]>([]);
   const [loading, setLoading] = useState(true);
   const [userName, setUserName] = useState("");
   const [createOpen, setCreateOpen] = useState(false);
+  const [createV2Open, setCreateV2Open] = useState(false);
   const router = useRouter();
 
   const fetchDocs = useCallback(async () => {
     try {
-      const res = await fetch("/api/quality");
-      const data = await res.json();
-      setDocs(data);
+      const [legacyRes, v2Res] = await Promise.all([
+        fetch("/api/quality"),
+        fetch("/api/quality/v2"),
+      ]);
+      const legacyData = await legacyRes.json();
+      const v2Data = await v2Res.json();
+      setDocs(legacyData);
+      setV2Docs(Array.isArray(v2Data) ? v2Data : []);
     } catch (error) {
       console.error("Error fetching docs:", error);
     } finally {
@@ -56,9 +65,18 @@ export default function LabDashboard() {
     router.refresh();
   };
 
+  // Legacy docs
   const workerFilledDocs = docs.filter((d) => d.status === "worker_filled");
   const draftDocs = docs.filter((d) => d.status === "draft");
   const completeDocs = docs.filter((d) => d.status === "complete");
+
+  // V2 docs
+  const v2WorkerFilledDocs = v2Docs.filter((d) => d.status === "worker_filled");
+  const v2DraftDocs = v2Docs.filter((d) => d.status === "draft");
+  const v2CompleteDocs = v2Docs.filter((d) => d.status === "complete");
+
+  const totalReadyForAnalysis = workerFilledDocs.length + v2WorkerFilledDocs.length;
+  const hasAnyDocs = docs.length > 0 || v2Docs.length > 0;
 
   return (
     <div className="min-h-screen bg-background">
@@ -91,16 +109,22 @@ export default function LabDashboard() {
       </header>
 
       <main className="max-w-2xl mx-auto px-4 py-6 space-y-6">
-        <Button onClick={() => setCreateOpen(true)} className="w-full">
-          <Plus size={16} className="mr-2" />
-          New Quality Document
-        </Button>
+        <div className="flex gap-2">
+          <Button onClick={() => setCreateV2Open(true)} className="flex-1">
+            <Plus size={16} className="mr-2" />
+            New Quality Document
+          </Button>
+          <Button onClick={() => setCreateOpen(true)} variant="outline" className="flex-1">
+            <Plus size={16} className="mr-2" />
+            Legacy Document
+          </Button>
+        </div>
 
         {loading ? (
           <div className="flex justify-center py-16">
             <Loader2 className="animate-spin text-muted-foreground" size={32} />
           </div>
-        ) : docs.length === 0 ? (
+        ) : !hasAnyDocs ? (
           <div className="text-center py-16 text-muted-foreground">
             <FlaskConical size={48} className="mx-auto mb-4 opacity-30" />
             <p className="text-lg font-medium">No quality documents yet</p>
@@ -108,11 +132,51 @@ export default function LabDashboard() {
           </div>
         ) : (
           <>
-            {workerFilledDocs.length > 0 && (
+            {/* Ready for Analysis - V2 */}
+            {v2WorkerFilledDocs.length > 0 && (
               <div className="space-y-2">
                 <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider px-1">
-                  Ready for Analysis ({workerFilledDocs.length})
+                  Ready for Analysis ({totalReadyForAnalysis})
                 </h2>
+                <div className="space-y-2">
+                  {v2WorkerFilledDocs.map((d) => (
+                    <Link key={d.id} href={`/quality/v2/${d.id}`}>
+                      <Card className="hover:bg-muted/50 transition-colors cursor-pointer border-2 border-amber-500/30">
+                        <CardContent className="p-4 flex items-center justify-between">
+                          <div className="space-y-1">
+                            <p className="font-medium">{d.templateTitle}</p>
+                            <p className="text-sm text-muted-foreground">{d.docId}</p>
+                            <div className="flex items-center gap-2">
+                              <Badge className={statusColors[d.status]}>
+                                {statusLabels[d.status]}
+                              </Badge>
+                              <Badge variant="outline" className="text-[10px]">
+                                {d.rowCount} rows
+                              </Badge>
+                              {d.workerName && (
+                                <span className="text-xs text-muted-foreground">
+                                  by {d.workerName}
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                          <ChevronRight size={20} className="text-muted-foreground" />
+                        </CardContent>
+                      </Card>
+                    </Link>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Ready for Analysis - Legacy */}
+            {workerFilledDocs.length > 0 && (
+              <div className="space-y-2">
+                {v2WorkerFilledDocs.length === 0 && (
+                  <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider px-1">
+                    Ready for Analysis ({totalReadyForAnalysis})
+                  </h2>
+                )}
                 <div className="space-y-2">
                   {workerFilledDocs.map((d) => (
                     <Link key={d.id} href={`/lab/${d.id}`}>
@@ -146,12 +210,31 @@ export default function LabDashboard() {
               </div>
             )}
 
-            {draftDocs.length > 0 && (
+            {/* Draft - Pending Worker Fill */}
+            {(v2DraftDocs.length > 0 || draftDocs.length > 0) && (
               <div className="space-y-2">
                 <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider px-1">
-                  Draft — Pending Worker Fill ({draftDocs.length})
+                  Draft — Pending Worker Fill ({v2DraftDocs.length + draftDocs.length})
                 </h2>
                 <div className="space-y-2">
+                  {v2DraftDocs.map((d) => (
+                    <Card key={d.id} className="opacity-70">
+                      <CardContent className="p-4">
+                        <div className="space-y-1">
+                          <p className="font-medium">{d.templateTitle}</p>
+                          <p className="text-sm text-muted-foreground">{d.docId}</p>
+                          <div className="flex items-center gap-2">
+                            <Badge className={statusColors[d.status]}>
+                              {statusLabels[d.status]}
+                            </Badge>
+                            <Badge variant="outline" className="text-[10px]">
+                              {d.rowCount} rows
+                            </Badge>
+                          </div>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  ))}
                   {draftDocs.map((d) => (
                     <Card key={d.id} className="opacity-70">
                       <CardContent className="p-4">
@@ -176,12 +259,36 @@ export default function LabDashboard() {
               </div>
             )}
 
-            {completeDocs.length > 0 && (
+            {/* Completed */}
+            {(v2CompleteDocs.length > 0 || completeDocs.length > 0) && (
               <div className="space-y-2">
                 <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider px-1">
-                  Completed ({completeDocs.length})
+                  Completed ({v2CompleteDocs.length + completeDocs.length})
                 </h2>
                 <div className="space-y-2">
+                  {v2CompleteDocs.map((d) => (
+                    <Link key={d.id} href={`/quality/v2/${d.id}`}>
+                      <Card className="opacity-50 hover:opacity-70 transition-opacity cursor-pointer">
+                        <CardContent className="p-4 flex items-center justify-between">
+                          <div className="space-y-1">
+                            <p className="font-medium">{d.templateTitle}</p>
+                            <p className="text-sm text-muted-foreground">{d.docId}</p>
+                            <div className="flex items-center gap-2">
+                              <Badge className={statusColors[d.status]}>
+                                {statusLabels[d.status]}
+                              </Badge>
+                              {d.workerName && (
+                                <span className="text-xs text-muted-foreground">
+                                  by {d.workerName}
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                          <ChevronRight size={20} className="text-muted-foreground" />
+                        </CardContent>
+                      </Card>
+                    </Link>
+                  ))}
                   {completeDocs.map((d) => (
                     <Card key={d.id} className="opacity-50">
                       <CardContent className="p-4">
@@ -214,6 +321,12 @@ export default function LabDashboard() {
       <QualityDocDialog
         open={createOpen}
         onOpenChange={setCreateOpen}
+        onCreated={fetchDocs}
+      />
+
+      <CreateQualityDocV2Dialog
+        open={createV2Open}
+        onOpenChange={setCreateV2Open}
         onCreated={fetchDocs}
       />
     </div>

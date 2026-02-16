@@ -7,7 +7,8 @@ import { ArrowLeft, Loader2, FileCheck, ChevronRight, LogOut } from "lucide-reac
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
-import type { QualityDocument } from "@/lib/schemas";
+import { Separator } from "@/components/ui/separator";
+import type { QualityDocument, QualityDocumentV2 } from "@/lib/schemas";
 import { ThemeToggle } from "@/components/theme-toggle";
 
 const statusLabels: Record<string, string> = {
@@ -25,11 +26,11 @@ const statusColors: Record<string, string> = {
 export default function QualityPage() {
   const router = useRouter();
   const [docs, setDocs] = useState<QualityDocument[]>([]);
+  const [v2Docs, setV2Docs] = useState<QualityDocumentV2[]>([]);
   const [userName, setUserName] = useState("");
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Check authentication first
     fetch("/api/auth")
       .then((res) => res.json())
       .then((data) => {
@@ -38,15 +39,16 @@ export default function QualityPage() {
           return;
         }
         setUserName(data.fullName || "");
-        // User is authenticated, fetch quality docs
-        return fetch("/api/quality");
+        return Promise.all([
+          fetch("/api/quality").then((r) => r.json()),
+          fetch("/api/quality/v2").then((r) => r.json()),
+        ]);
       })
-      .then((res) => {
-        if (!res) return null;
-        return res.json();
-      })
-      .then((data) => {
-        if (data) setDocs(data);
+      .then((results) => {
+        if (results) {
+          setDocs(results[0]);
+          setV2Docs(Array.isArray(results[1]) ? results[1] : []);
+        }
       })
       .catch((error) => {
         console.error(error);
@@ -63,6 +65,15 @@ export default function QualityPage() {
 
   const draftDocs = docs.filter((d) => d.status === "draft");
   const otherDocs = docs.filter((d) => d.status !== "draft");
+
+  const v2DraftDocs = v2Docs.filter((d) => d.status === "draft");
+  const v2OtherDocs = v2Docs.filter((d) => d.status !== "draft");
+
+  const hasNoContent =
+    draftDocs.length === 0 &&
+    otherDocs.length === 0 &&
+    v2DraftDocs.length === 0 &&
+    v2OtherDocs.length === 0;
 
   return (
     <div className="min-h-screen bg-background">
@@ -104,7 +115,7 @@ export default function QualityPage() {
           <div className="flex justify-center py-16">
             <Loader2 className="animate-spin text-muted-foreground" size={32} />
           </div>
-        ) : draftDocs.length === 0 && otherDocs.length === 0 ? (
+        ) : hasNoContent ? (
           <div className="text-center py-16 text-muted-foreground">
             <FileCheck size={48} className="mx-auto mb-4 opacity-30" />
             <p className="text-lg font-medium">No quality documents</p>
@@ -112,11 +123,46 @@ export default function QualityPage() {
           </div>
         ) : (
           <>
-            {draftDocs.length > 0 && (
+            {/* V2 Draft Docs - Pending Fill */}
+            {v2DraftDocs.length > 0 && (
               <div className="space-y-2">
                 <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider px-1">
                   Pending — Fill These
                 </h2>
+                <div className="space-y-2">
+                  {v2DraftDocs.map((d) => (
+                    <Link key={d.id} href={`/quality/v2/${d.id}`}>
+                      <Card className="hover:bg-muted/50 transition-colors cursor-pointer border-2 border-blue-500/30">
+                        <CardContent className="p-4 flex items-center justify-between">
+                          <div className="space-y-1">
+                            <p className="font-medium">{d.templateTitle}</p>
+                            <p className="text-sm text-muted-foreground">{d.docId}</p>
+                            <div className="flex items-center gap-2">
+                              <Badge className={statusColors[d.status]}>
+                                {statusLabels[d.status]}
+                              </Badge>
+                              <Badge variant="outline" className="text-[10px]">
+                                {d.rowCount} rows
+                              </Badge>
+                            </div>
+                          </div>
+                          <ChevronRight size={20} className="text-muted-foreground" />
+                        </CardContent>
+                      </Card>
+                    </Link>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Legacy Draft Docs */}
+            {draftDocs.length > 0 && (
+              <div className="space-y-2">
+                {v2DraftDocs.length === 0 && (
+                  <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider px-1">
+                    Pending — Fill These
+                  </h2>
+                )}
                 <div className="space-y-2">
                   {draftDocs.map((d) => (
                     <Link key={d.id} href={`/quality/${d.id}`}>
@@ -145,12 +191,34 @@ export default function QualityPage() {
               </div>
             )}
 
-            {otherDocs.length > 0 && (
+            {/* Previously Submitted */}
+            {(v2OtherDocs.length > 0 || otherDocs.length > 0) && (
               <div className="space-y-2">
                 <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider px-1">
                   Previously Submitted
                 </h2>
                 <div className="space-y-2">
+                  {v2OtherDocs.map((d) => (
+                    <Link key={d.id} href={`/quality/v2/${d.id}`}>
+                      <Card className="opacity-60 hover:opacity-80 transition-opacity cursor-pointer">
+                        <CardContent className="p-4 flex items-center justify-between">
+                          <div className="space-y-1">
+                            <p className="font-medium">{d.templateTitle}</p>
+                            <p className="text-sm text-muted-foreground">{d.docId}</p>
+                            <div className="flex items-center gap-2">
+                              <Badge className={statusColors[d.status]}>
+                                {statusLabels[d.status]}
+                              </Badge>
+                              {d.workerName && (
+                                <span className="text-xs text-muted-foreground">by {d.workerName}</span>
+                              )}
+                            </div>
+                          </div>
+                          <ChevronRight size={20} className="text-muted-foreground" />
+                        </CardContent>
+                      </Card>
+                    </Link>
+                  ))}
                   {otherDocs.map((d) => (
                     <Card key={d.id} className="opacity-60">
                       <CardContent className="p-4">
