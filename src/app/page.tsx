@@ -72,6 +72,16 @@ const tools = [
     requiredRoles: [] as UserRole[],
   },
   {
+    id: "documents",
+    name: "Documents",
+    description: "View instructions, SOPs, and safety documents",
+    icon: FileText,
+    color: "text-teal-500",
+    bgColor: "bg-teal-500/10 hover:bg-teal-500/20",
+    available: true,
+    requiredRoles: [] as UserRole[], // All authenticated users
+  },
+  {
     id: "shift-handover",
     name: "Shift Handover",
     description: "Document shift handover notes and updates",
@@ -147,6 +157,8 @@ export default function Home() {
       router.push("/quality");
     } else if (toolId === "shipments") {
       router.push("/shipments");
+    } else if (toolId === "documents") {
+      router.push("/documents");
     }
   };
 
