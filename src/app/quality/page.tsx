@@ -169,9 +169,9 @@ export default function QualityPage() {
                       <Card className="hover:bg-muted/50 transition-colors cursor-pointer border-2 border-blue-500/30">
                         <CardContent className="p-4 flex items-center justify-between">
                           <div className="space-y-1">
-                            <p className="font-medium">PO: {d.poNumber}</p>
+                            <p className="font-medium">Bulk Density & Metal Contamination Report</p>
                             <p className="text-sm text-muted-foreground">
-                              {d.materialCode} — {d.customerName}
+                              PO: {d.poNumber} — {d.materialCode} — {d.customerName}
                             </p>
                             <div className="flex items-center gap-2">
                               <Badge className={statusColors[d.status]}>

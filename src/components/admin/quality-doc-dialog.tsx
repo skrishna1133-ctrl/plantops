@@ -82,9 +82,9 @@ export default function QualityDocDialog({
     <Dialog open={open} onOpenChange={(v) => { onOpenChange(v); if (!v) resetForm(); }}>
       <DialogContent className="max-w-md">
         <DialogHeader>
-          <DialogTitle>New Quality Document</DialogTitle>
+          <DialogTitle>Bulk Density & Metal Contamination Report</DialogTitle>
           <DialogDescription>
-            Create a quality inspection document for a shipment
+            Create a bulk density and metal contamination inspection document
           </DialogDescription>
         </DialogHeader>
 

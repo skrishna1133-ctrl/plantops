@@ -116,7 +116,7 @@ export default function LabDashboard() {
           </Button>
           <Button onClick={() => setCreateOpen(true)} variant="outline" className="flex-1">
             <Plus size={16} className="mr-2" />
-            Legacy Document
+            BD & Metal Contam.
           </Button>
         </div>
 
@@ -183,9 +183,9 @@ export default function LabDashboard() {
                       <Card className="hover:bg-muted/50 transition-colors cursor-pointer border-2 border-amber-500/30">
                         <CardContent className="p-4 flex items-center justify-between">
                           <div className="space-y-1">
-                            <p className="font-medium">PO: {d.poNumber}</p>
+                            <p className="font-medium">Bulk Density & Metal Contamination Report</p>
                             <p className="text-sm text-muted-foreground">
-                              {d.materialCode} — {d.customerName}
+                              PO: {d.poNumber} — {d.materialCode} — {d.customerName}
                             </p>
                             <div className="flex items-center gap-2">
                               <Badge className={statusColors[d.status]}>
