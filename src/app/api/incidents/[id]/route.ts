@@ -21,7 +21,7 @@ export async function PATCH(
       );
     }
 
-    const updated = await dbIncidents.update(id, { status });
+    const updated = await dbIncidents.update(id, { status }, auth.payload.tenantId);
     if (!updated) {
       return NextResponse.json({ error: "Incident not found" }, { status: 404 });
     }
@@ -42,7 +42,7 @@ export async function DELETE(
 
   try {
     const { id } = await params;
-    const deleted = await dbIncidents.delete(id);
+    const deleted = await dbIncidents.delete(id, auth.payload.tenantId);
 
     if (!deleted) {
       return NextResponse.json({ error: "Incident not found" }, { status: 404 });

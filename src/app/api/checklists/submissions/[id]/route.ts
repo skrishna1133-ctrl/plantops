@@ -11,7 +11,7 @@ export async function DELETE(
 
   try {
     const { id } = await params;
-    const deleted = await dbSubmissions.delete(id);
+    const deleted = await dbSubmissions.delete(id, auth.payload.tenantId);
 
     if (!deleted) {
       return NextResponse.json({ error: "Submission not found" }, { status: 404 });

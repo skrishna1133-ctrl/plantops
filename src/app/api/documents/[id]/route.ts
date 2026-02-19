@@ -96,7 +96,7 @@ export async function PATCH(
       }
 
       updates.updatedAt = new Date().toISOString();
-      const updated = await dbInstructionDocuments.update(id, updates);
+      const updated = await dbInstructionDocuments.update(id, updates, auth.payload.tenantId);
       return NextResponse.json(updated);
     } else {
       const body = await request.json();
@@ -107,7 +107,7 @@ export async function PATCH(
       if (body.allowedRoles) updates.allowedRoles = body.allowedRoles;
 
       updates.updatedAt = new Date().toISOString();
-      const updated = await dbInstructionDocuments.update(id, updates);
+      const updated = await dbInstructionDocuments.update(id, updates, auth.payload.tenantId);
       return NextResponse.json(updated);
     }
   } catch (error) {
@@ -143,7 +143,7 @@ export async function DELETE(
       }
     }
 
-    await dbInstructionDocuments.delete(id);
+    await dbInstructionDocuments.delete(id, auth.payload.tenantId);
     return NextResponse.json({ success: true });
   } catch (error) {
     console.error("Error deleting document:", error);

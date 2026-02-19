@@ -37,7 +37,7 @@ export async function POST(request: NextRequest) {
     const tempPassword = generateTempPassword();
     const passwordHash = await hashPassword(tempPassword);
 
-    await dbUsers.update(userId, { passwordHash });
+    await dbUsers.update(userId, { passwordHash }, null);
 
     return NextResponse.json({ tempPassword });
   } catch (error) {

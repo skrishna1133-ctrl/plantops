@@ -9,7 +9,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
   const { id } = await params;
   const body = await request.json();
 
-  const updated = await dbShipments.update(id, body);
+  const updated = await dbShipments.update(id, body, auth.payload.tenantId);
   if (!updated) return NextResponse.json({ error: "Shipment not found" }, { status: 404 });
 
   return NextResponse.json({ success: true });
@@ -20,7 +20,7 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
   if (!auth.ok) return auth.response;
 
   const { id } = await params;
-  const deleted = await dbShipments.delete(id);
+  const deleted = await dbShipments.delete(id, auth.payload.tenantId);
   if (!deleted) return NextResponse.json({ error: "Shipment not found" }, { status: 404 });
 
   return NextResponse.json({ success: true });

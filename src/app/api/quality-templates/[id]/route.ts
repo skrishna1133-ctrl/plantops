@@ -35,7 +35,7 @@ export async function PATCH(
     const body = await request.json();
 
     if (body.active !== undefined) {
-      const updated = await dbQualityTemplates.update(id, { active: body.active });
+      const updated = await dbQualityTemplates.update(id, { active: body.active }, auth.payload.tenantId);
       if (!updated) {
         return NextResponse.json({ error: "Template not found" }, { status: 404 });
       }
@@ -46,7 +46,7 @@ export async function PATCH(
       if (body.title.length < 3) {
         return NextResponse.json({ error: "Title must be at least 3 characters" }, { status: 400 });
       }
-      const updated = await dbQualityTemplates.update(id, { title: body.title });
+      const updated = await dbQualityTemplates.update(id, { title: body.title }, auth.payload.tenantId);
       if (!updated) {
         return NextResponse.json({ error: "Template not found" }, { status: 404 });
       }
@@ -69,7 +69,7 @@ export async function DELETE(
 
   try {
     const { id } = await params;
-    const deleted = await dbQualityTemplates.delete(id);
+    const deleted = await dbQualityTemplates.delete(id, auth.payload.tenantId);
     if (!deleted) {
       return NextResponse.json({ error: "Template not found" }, { status: 404 });
     }

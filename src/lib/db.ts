@@ -294,19 +294,25 @@ export const dbIncidents = {
     `;
   },
 
-  async update(id: string, data: Partial<IncidentReport>): Promise<boolean> {
+  async update(id: string, data: Partial<IncidentReport>, tenantId: string | null): Promise<boolean> {
     await initTables();
     if (data.status) {
-      const { rowCount } = await sql`
-        UPDATE incidents SET status = ${data.status} WHERE id = ${id}
-      `;
+      if (tenantId !== null) {
+        const { rowCount } = await sql`UPDATE incidents SET status = ${data.status} WHERE id = ${id} AND tenant_id = ${tenantId}`;
+        return (rowCount ?? 0) > 0;
+      }
+      const { rowCount } = await sql`UPDATE incidents SET status = ${data.status} WHERE id = ${id}`;
       return (rowCount ?? 0) > 0;
     }
     return false;
   },
 
-  async delete(id: string): Promise<boolean> {
+  async delete(id: string, tenantId: string | null): Promise<boolean> {
     await initTables();
+    if (tenantId !== null) {
+      const { rowCount } = await sql`DELETE FROM incidents WHERE id = ${id} AND tenant_id = ${tenantId}`;
+      return (rowCount ?? 0) > 0;
+    }
     const { rowCount } = await sql`DELETE FROM incidents WHERE id = ${id}`;
     return (rowCount ?? 0) > 0;
   },
@@ -371,21 +377,33 @@ export const dbTemplates = {
     `;
   },
 
-  async update(id: string, data: Partial<ChecklistTemplate>): Promise<boolean> {
+  async update(id: string, data: Partial<ChecklistTemplate>, tenantId: string | null): Promise<boolean> {
     await initTables();
     if (data.active !== undefined) {
+      if (tenantId !== null) {
+        const { rowCount } = await sql`UPDATE checklist_templates SET active = ${data.active} WHERE id = ${id} AND tenant_id = ${tenantId}`;
+        return (rowCount ?? 0) > 0;
+      }
       const { rowCount } = await sql`UPDATE checklist_templates SET active = ${data.active} WHERE id = ${id}`;
       return (rowCount ?? 0) > 0;
     }
     if (data.title) {
+      if (tenantId !== null) {
+        const { rowCount } = await sql`UPDATE checklist_templates SET title = ${data.title} WHERE id = ${id} AND tenant_id = ${tenantId}`;
+        return (rowCount ?? 0) > 0;
+      }
       const { rowCount } = await sql`UPDATE checklist_templates SET title = ${data.title} WHERE id = ${id}`;
       return (rowCount ?? 0) > 0;
     }
     return false;
   },
 
-  async delete(id: string): Promise<boolean> {
+  async delete(id: string, tenantId: string | null): Promise<boolean> {
     await initTables();
+    if (tenantId !== null) {
+      const { rowCount } = await sql`DELETE FROM checklist_templates WHERE id = ${id} AND tenant_id = ${tenantId}`;
+      return (rowCount ?? 0) > 0;
+    }
     const { rowCount } = await sql`DELETE FROM checklist_templates WHERE id = ${id}`;
     return (rowCount ?? 0) > 0;
   },
@@ -444,8 +462,12 @@ export const dbSubmissions = {
     `;
   },
 
-  async delete(id: string): Promise<boolean> {
+  async delete(id: string, tenantId: string | null): Promise<boolean> {
     await initTables();
+    if (tenantId !== null) {
+      const { rowCount } = await sql`DELETE FROM checklist_submissions WHERE id = ${id} AND tenant_id = ${tenantId}`;
+      return (rowCount ?? 0) > 0;
+    }
     const { rowCount } = await sql`DELETE FROM checklist_submissions WHERE id = ${id}`;
     return (rowCount ?? 0) > 0;
   },
@@ -556,39 +578,51 @@ export const dbQualityDocs = {
     `;
   },
 
-  async update(id: string, data: Partial<QualityDocument>): Promise<boolean> {
+  async update(id: string, data: Partial<QualityDocument>, tenantId: string | null): Promise<boolean> {
     await initTables();
     const now = new Date().toISOString();
 
     if (data.rows !== undefined && data.status !== undefined && data.personName !== undefined) {
-      const { rowCount } = await sql`
-        UPDATE quality_documents SET rows = ${JSON.stringify(data.rows)}, status = ${data.status}, person_name = ${data.personName}, updated_at = ${now} WHERE id = ${id}
-      `;
+      if (tenantId !== null) {
+        const { rowCount } = await sql`UPDATE quality_documents SET rows = ${JSON.stringify(data.rows)}, status = ${data.status}, person_name = ${data.personName}, updated_at = ${now} WHERE id = ${id} AND tenant_id = ${tenantId}`;
+        return (rowCount ?? 0) > 0;
+      }
+      const { rowCount } = await sql`UPDATE quality_documents SET rows = ${JSON.stringify(data.rows)}, status = ${data.status}, person_name = ${data.personName}, updated_at = ${now} WHERE id = ${id}`;
       return (rowCount ?? 0) > 0;
     }
     if (data.rows !== undefined && data.status !== undefined) {
-      const { rowCount } = await sql`
-        UPDATE quality_documents SET rows = ${JSON.stringify(data.rows)}, status = ${data.status}, updated_at = ${now} WHERE id = ${id}
-      `;
+      if (tenantId !== null) {
+        const { rowCount } = await sql`UPDATE quality_documents SET rows = ${JSON.stringify(data.rows)}, status = ${data.status}, updated_at = ${now} WHERE id = ${id} AND tenant_id = ${tenantId}`;
+        return (rowCount ?? 0) > 0;
+      }
+      const { rowCount } = await sql`UPDATE quality_documents SET rows = ${JSON.stringify(data.rows)}, status = ${data.status}, updated_at = ${now} WHERE id = ${id}`;
       return (rowCount ?? 0) > 0;
     }
     if (data.rows !== undefined) {
-      const { rowCount } = await sql`
-        UPDATE quality_documents SET rows = ${JSON.stringify(data.rows)}, updated_at = ${now} WHERE id = ${id}
-      `;
+      if (tenantId !== null) {
+        const { rowCount } = await sql`UPDATE quality_documents SET rows = ${JSON.stringify(data.rows)}, updated_at = ${now} WHERE id = ${id} AND tenant_id = ${tenantId}`;
+        return (rowCount ?? 0) > 0;
+      }
+      const { rowCount } = await sql`UPDATE quality_documents SET rows = ${JSON.stringify(data.rows)}, updated_at = ${now} WHERE id = ${id}`;
       return (rowCount ?? 0) > 0;
     }
     if (data.status !== undefined) {
-      const { rowCount } = await sql`
-        UPDATE quality_documents SET status = ${data.status}, updated_at = ${now} WHERE id = ${id}
-      `;
+      if (tenantId !== null) {
+        const { rowCount } = await sql`UPDATE quality_documents SET status = ${data.status}, updated_at = ${now} WHERE id = ${id} AND tenant_id = ${tenantId}`;
+        return (rowCount ?? 0) > 0;
+      }
+      const { rowCount } = await sql`UPDATE quality_documents SET status = ${data.status}, updated_at = ${now} WHERE id = ${id}`;
       return (rowCount ?? 0) > 0;
     }
     return false;
   },
 
-  async delete(id: string): Promise<boolean> {
+  async delete(id: string, tenantId: string | null): Promise<boolean> {
     await initTables();
+    if (tenantId !== null) {
+      const { rowCount } = await sql`DELETE FROM quality_documents WHERE id = ${id} AND tenant_id = ${tenantId}`;
+      return (rowCount ?? 0) > 0;
+    }
     const { rowCount } = await sql`DELETE FROM quality_documents WHERE id = ${id}`;
     return (rowCount ?? 0) > 0;
   },
@@ -678,7 +712,7 @@ export const dbUsers = {
     `;
   },
 
-  async update(id: string, data: { fullName?: string; role?: UserRole; active?: boolean; passwordHash?: string }): Promise<boolean> {
+  async update(id: string, data: { fullName?: string; role?: UserRole; active?: boolean; passwordHash?: string }, tenantId: string | null): Promise<boolean> {
     await initTables();
     const now = new Date().toISOString();
     const user = await this.getById(id);
@@ -689,19 +723,27 @@ export const dbUsers = {
     const active = data.active ?? user.active;
 
     if (data.passwordHash) {
-      const { rowCount } = await sql`
-        UPDATE users SET full_name = ${fullName}, role = ${role}, active = ${active}, password_hash = ${data.passwordHash}, updated_at = ${now} WHERE id = ${id}
-      `;
+      if (tenantId !== null) {
+        const { rowCount } = await sql`UPDATE users SET full_name = ${fullName}, role = ${role}, active = ${active}, password_hash = ${data.passwordHash}, updated_at = ${now} WHERE id = ${id} AND tenant_id = ${tenantId}`;
+        return (rowCount ?? 0) > 0;
+      }
+      const { rowCount } = await sql`UPDATE users SET full_name = ${fullName}, role = ${role}, active = ${active}, password_hash = ${data.passwordHash}, updated_at = ${now} WHERE id = ${id}`;
       return (rowCount ?? 0) > 0;
     }
-    const { rowCount } = await sql`
-      UPDATE users SET full_name = ${fullName}, role = ${role}, active = ${active}, updated_at = ${now} WHERE id = ${id}
-    `;
+    if (tenantId !== null) {
+      const { rowCount } = await sql`UPDATE users SET full_name = ${fullName}, role = ${role}, active = ${active}, updated_at = ${now} WHERE id = ${id} AND tenant_id = ${tenantId}`;
+      return (rowCount ?? 0) > 0;
+    }
+    const { rowCount } = await sql`UPDATE users SET full_name = ${fullName}, role = ${role}, active = ${active}, updated_at = ${now} WHERE id = ${id}`;
     return (rowCount ?? 0) > 0;
   },
 
-  async delete(id: string): Promise<boolean> {
+  async delete(id: string, tenantId: string | null): Promise<boolean> {
     await initTables();
+    if (tenantId !== null) {
+      const { rowCount } = await sql`DELETE FROM users WHERE id = ${id} AND tenant_id = ${tenantId}`;
+      return (rowCount ?? 0) > 0;
+    }
     const { rowCount } = await sql`DELETE FROM users WHERE id = ${id}`;
     return (rowCount ?? 0) > 0;
   },
@@ -776,7 +818,7 @@ export const dbShipments = {
     `;
   },
 
-  async update(id: string, data: Partial<Shipment>): Promise<boolean> {
+  async update(id: string, data: Partial<Shipment>, tenantId: string | null): Promise<boolean> {
     await initTables();
     const now = new Date().toISOString();
     const existing = await this.getById(id);
@@ -792,14 +834,20 @@ export const dbShipments = {
     const notes = data.notes !== undefined ? data.notes : existing.notes;
     const status = data.status ?? existing.status;
 
-    const { rowCount } = await sql`
-      UPDATE shipments SET type = ${type}, po_number = ${poNumber}, material_code = ${materialCode}, supplier_name = ${supplierName || null}, customer_name = ${customerName || null}, carrier = ${carrier}, shipment_date = ${shipmentDate}, notes = ${notes || null}, status = ${status}, updated_at = ${now} WHERE id = ${id}
-    `;
+    if (tenantId !== null) {
+      const { rowCount } = await sql`UPDATE shipments SET type = ${type}, po_number = ${poNumber}, material_code = ${materialCode}, supplier_name = ${supplierName || null}, customer_name = ${customerName || null}, carrier = ${carrier}, shipment_date = ${shipmentDate}, notes = ${notes || null}, status = ${status}, updated_at = ${now} WHERE id = ${id} AND tenant_id = ${tenantId}`;
+      return (rowCount ?? 0) > 0;
+    }
+    const { rowCount } = await sql`UPDATE shipments SET type = ${type}, po_number = ${poNumber}, material_code = ${materialCode}, supplier_name = ${supplierName || null}, customer_name = ${customerName || null}, carrier = ${carrier}, shipment_date = ${shipmentDate}, notes = ${notes || null}, status = ${status}, updated_at = ${now} WHERE id = ${id}`;
     return (rowCount ?? 0) > 0;
   },
 
-  async delete(id: string): Promise<boolean> {
+  async delete(id: string, tenantId: string | null): Promise<boolean> {
     await initTables();
+    if (tenantId !== null) {
+      const { rowCount } = await sql`DELETE FROM shipments WHERE id = ${id} AND tenant_id = ${tenantId}`;
+      return (rowCount ?? 0) > 0;
+    }
     const { rowCount } = await sql`DELETE FROM shipments WHERE id = ${id}`;
     return (rowCount ?? 0) > 0;
   },
@@ -862,22 +910,34 @@ export const dbQualityTemplates = {
     `;
   },
 
-  async update(id: string, data: Partial<QualityTemplate>): Promise<boolean> {
+  async update(id: string, data: Partial<QualityTemplate>, tenantId: string | null): Promise<boolean> {
     await initTables();
     const now = new Date().toISOString();
     if (data.active !== undefined) {
+      if (tenantId !== null) {
+        const { rowCount } = await sql`UPDATE quality_templates SET active = ${data.active}, updated_at = ${now} WHERE id = ${id} AND tenant_id = ${tenantId}`;
+        return (rowCount ?? 0) > 0;
+      }
       const { rowCount } = await sql`UPDATE quality_templates SET active = ${data.active}, updated_at = ${now} WHERE id = ${id}`;
       return (rowCount ?? 0) > 0;
     }
     if (data.title) {
+      if (tenantId !== null) {
+        const { rowCount } = await sql`UPDATE quality_templates SET title = ${data.title}, updated_at = ${now} WHERE id = ${id} AND tenant_id = ${tenantId}`;
+        return (rowCount ?? 0) > 0;
+      }
       const { rowCount } = await sql`UPDATE quality_templates SET title = ${data.title}, updated_at = ${now} WHERE id = ${id}`;
       return (rowCount ?? 0) > 0;
     }
     return false;
   },
 
-  async delete(id: string): Promise<boolean> {
+  async delete(id: string, tenantId: string | null): Promise<boolean> {
     await initTables();
+    if (tenantId !== null) {
+      const { rowCount } = await sql`DELETE FROM quality_templates WHERE id = ${id} AND tenant_id = ${tenantId}`;
+      return (rowCount ?? 0) > 0;
+    }
     const { rowCount } = await sql`DELETE FROM quality_templates WHERE id = ${id}`;
     return (rowCount ?? 0) > 0;
   },
@@ -957,7 +1017,7 @@ export const dbQualityDocsV2 = {
     `;
   },
 
-  async update(id: string, data: Partial<QualityDocumentV2>): Promise<boolean> {
+  async update(id: string, data: Partial<QualityDocumentV2>, tenantId: string | null): Promise<boolean> {
     await initTables();
     const now = new Date().toISOString();
     const existing = await this.getById(id);
@@ -971,23 +1031,20 @@ export const dbQualityDocsV2 = {
     const workerFilledAt = data.workerFilledAt !== undefined ? data.workerFilledAt : existing.workerFilledAt;
     const completedAt = data.completedAt !== undefined ? data.completedAt : existing.completedAt;
 
-    const { rowCount } = await sql`
-      UPDATE quality_documents_v2
-      SET header_values = ${headerValues}::jsonb,
-          rows = ${rows}::jsonb,
-          status = ${status},
-          worker_name = ${workerName || null},
-          quality_tech_name = ${qualityTechName || null},
-          worker_filled_at = ${workerFilledAt || null},
-          completed_at = ${completedAt || null},
-          updated_at = ${now}
-      WHERE id = ${id}
-    `;
+    if (tenantId !== null) {
+      const { rowCount } = await sql`UPDATE quality_documents_v2 SET header_values = ${headerValues}::jsonb, rows = ${rows}::jsonb, status = ${status}, worker_name = ${workerName || null}, quality_tech_name = ${qualityTechName || null}, worker_filled_at = ${workerFilledAt || null}, completed_at = ${completedAt || null}, updated_at = ${now} WHERE id = ${id} AND tenant_id = ${tenantId}`;
+      return (rowCount ?? 0) > 0;
+    }
+    const { rowCount } = await sql`UPDATE quality_documents_v2 SET header_values = ${headerValues}::jsonb, rows = ${rows}::jsonb, status = ${status}, worker_name = ${workerName || null}, quality_tech_name = ${qualityTechName || null}, worker_filled_at = ${workerFilledAt || null}, completed_at = ${completedAt || null}, updated_at = ${now} WHERE id = ${id}`;
     return (rowCount ?? 0) > 0;
   },
 
-  async delete(id: string): Promise<boolean> {
+  async delete(id: string, tenantId: string | null): Promise<boolean> {
     await initTables();
+    if (tenantId !== null) {
+      const { rowCount } = await sql`DELETE FROM quality_documents_v2 WHERE id = ${id} AND tenant_id = ${tenantId}`;
+      return (rowCount ?? 0) > 0;
+    }
     const { rowCount } = await sql`DELETE FROM quality_documents_v2 WHERE id = ${id}`;
     return (rowCount ?? 0) > 0;
   },
@@ -1040,9 +1097,16 @@ export const dbDocumentFolders = {
     `;
   },
 
-  async update(id: string, data: { name?: string; description?: string }): Promise<boolean> {
+  async update(id: string, data: { name?: string; description?: string }, tenantId: string | null): Promise<boolean> {
     await initTables();
     if (data.name) {
+      if (tenantId !== null) {
+        const { rowCount } = await sql`UPDATE document_folders SET name = ${data.name} WHERE id = ${id} AND tenant_id = ${tenantId}`;
+        if ((rowCount ?? 0) > 0) {
+          await sql`UPDATE instruction_documents SET folder_name = ${data.name} WHERE folder_id = ${id}`;
+        }
+        return (rowCount ?? 0) > 0;
+      }
       const { rowCount } = await sql`UPDATE document_folders SET name = ${data.name} WHERE id = ${id}`;
       await sql`UPDATE instruction_documents SET folder_name = ${data.name} WHERE folder_id = ${id}`;
       return (rowCount ?? 0) > 0;
@@ -1050,8 +1114,12 @@ export const dbDocumentFolders = {
     return false;
   },
 
-  async delete(id: string): Promise<boolean> {
+  async delete(id: string, tenantId: string | null): Promise<boolean> {
     await initTables();
+    if (tenantId !== null) {
+      const { rowCount } = await sql`DELETE FROM document_folders WHERE id = ${id} AND tenant_id = ${tenantId}`;
+      return (rowCount ?? 0) > 0;
+    }
     const { rowCount } = await sql`DELETE FROM document_folders WHERE id = ${id}`;
     return (rowCount ?? 0) > 0;
   },
@@ -1112,7 +1180,7 @@ export const dbInstructionDocuments = {
     `;
   },
 
-  async update(id: string, data: Partial<InstructionDocument>): Promise<boolean> {
+  async update(id: string, data: Partial<InstructionDocument>, tenantId: string | null): Promise<boolean> {
     await initTables();
     const existing = await this.getById(id);
     if (!existing) return false;
@@ -1127,24 +1195,20 @@ export const dbInstructionDocuments = {
     const previousFileName = data.previousFileName !== undefined ? data.previousFileName : existing.previousFileName;
     const allowedRoles = data.allowedRoles ?? existing.allowedRoles;
 
-    const { rowCount } = await sql`
-      UPDATE instruction_documents SET
-        title = ${title},
-        description = ${description || null},
-        file_name = ${fileName},
-        file_url = ${fileUrl},
-        file_size = ${fileSize},
-        previous_file_url = ${previousFileUrl || null},
-        previous_file_name = ${previousFileName || null},
-        allowed_roles = ${JSON.stringify(allowedRoles)}::jsonb,
-        updated_at = ${now}
-      WHERE id = ${id}
-    `;
+    if (tenantId !== null) {
+      const { rowCount } = await sql`UPDATE instruction_documents SET title = ${title}, description = ${description || null}, file_name = ${fileName}, file_url = ${fileUrl}, file_size = ${fileSize}, previous_file_url = ${previousFileUrl || null}, previous_file_name = ${previousFileName || null}, allowed_roles = ${JSON.stringify(allowedRoles)}::jsonb, updated_at = ${now} WHERE id = ${id} AND tenant_id = ${tenantId}`;
+      return (rowCount ?? 0) > 0;
+    }
+    const { rowCount } = await sql`UPDATE instruction_documents SET title = ${title}, description = ${description || null}, file_name = ${fileName}, file_url = ${fileUrl}, file_size = ${fileSize}, previous_file_url = ${previousFileUrl || null}, previous_file_name = ${previousFileName || null}, allowed_roles = ${JSON.stringify(allowedRoles)}::jsonb, updated_at = ${now} WHERE id = ${id}`;
     return (rowCount ?? 0) > 0;
   },
 
-  async delete(id: string): Promise<boolean> {
+  async delete(id: string, tenantId: string | null): Promise<boolean> {
     await initTables();
+    if (tenantId !== null) {
+      const { rowCount } = await sql`DELETE FROM instruction_documents WHERE id = ${id} AND tenant_id = ${tenantId}`;
+      return (rowCount ?? 0) > 0;
+    }
     const { rowCount } = await sql`DELETE FROM instruction_documents WHERE id = ${id}`;
     return (rowCount ?? 0) > 0;
   },

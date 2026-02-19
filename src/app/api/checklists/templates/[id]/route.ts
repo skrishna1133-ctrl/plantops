@@ -14,14 +14,14 @@ export async function PATCH(
     const body = await request.json();
 
     if (body.active !== undefined) {
-      const updated = await dbTemplates.update(id, { active: body.active });
+      const updated = await dbTemplates.update(id, { active: body.active }, auth.payload.tenantId);
       if (!updated) {
         return NextResponse.json({ error: "Template not found" }, { status: 404 });
       }
     }
 
     if (body.title !== undefined) {
-      const updated = await dbTemplates.update(id, { title: body.title });
+      const updated = await dbTemplates.update(id, { title: body.title }, auth.payload.tenantId);
       if (!updated) {
         return NextResponse.json({ error: "Template not found" }, { status: 404 });
       }
@@ -44,7 +44,7 @@ export async function DELETE(
 
   try {
     const { id } = await params;
-    const deleted = await dbTemplates.delete(id);
+    const deleted = await dbTemplates.delete(id, auth.payload.tenantId);
 
     if (!deleted) {
       return NextResponse.json({ error: "Template not found" }, { status: 404 });

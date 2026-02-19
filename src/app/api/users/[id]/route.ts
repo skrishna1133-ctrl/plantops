@@ -19,7 +19,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     updateData.passwordHash = await hashPassword(body.password);
   }
 
-  const updated = await dbUsers.update(id, updateData);
+  const updated = await dbUsers.update(id, updateData, auth.payload.tenantId);
   if (!updated) return NextResponse.json({ error: "User not found" }, { status: 404 });
 
   return NextResponse.json({ success: true });
@@ -30,7 +30,7 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
   if (!auth.ok) return auth.response;
 
   const { id } = await params;
-  const deleted = await dbUsers.delete(id);
+  const deleted = await dbUsers.delete(id, auth.payload.tenantId);
   if (!deleted) return NextResponse.json({ error: "User not found" }, { status: 404 });
 
   return NextResponse.json({ success: true });

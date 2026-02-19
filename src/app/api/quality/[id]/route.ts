@@ -46,7 +46,7 @@ export async function PATCH(
     if (status !== undefined) updateData.status = status;
     updateData.personName = user.fullName;
 
-    const updated = await dbQualityDocs.update(id, updateData);
+    const updated = await dbQualityDocs.update(id, updateData, auth.payload.tenantId);
     if (!updated) {
       return NextResponse.json({ error: "Document not found" }, { status: 404 });
     }
@@ -67,7 +67,7 @@ export async function DELETE(
 
   try {
     const { id } = await params;
-    const deleted = await dbQualityDocs.delete(id);
+    const deleted = await dbQualityDocs.delete(id, auth.payload.tenantId);
 
     if (!deleted) {
       return NextResponse.json({ error: "Document not found" }, { status: 404 });

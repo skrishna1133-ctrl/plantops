@@ -143,7 +143,7 @@ export async function PATCH(
       updateData.completedAt = new Date().toISOString();
     }
 
-    const updated = await dbQualityDocsV2.update(id, updateData);
+    const updated = await dbQualityDocsV2.update(id, updateData, auth.payload.tenantId);
     if (!updated) {
       return NextResponse.json({ error: "Failed to update document" }, { status: 500 });
     }
@@ -164,7 +164,7 @@ export async function DELETE(
 
   try {
     const { id } = await params;
-    const deleted = await dbQualityDocsV2.delete(id);
+    const deleted = await dbQualityDocsV2.delete(id, auth.payload.tenantId);
     if (!deleted) {
       return NextResponse.json({ error: "Document not found" }, { status: 404 });
     }

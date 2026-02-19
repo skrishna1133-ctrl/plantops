@@ -17,7 +17,7 @@ export async function PATCH(
       return NextResponse.json({ error: "Folder name must be at least 2 characters" }, { status: 400 });
     }
 
-    const updated = await dbDocumentFolders.update(id, { name: body.name });
+    const updated = await dbDocumentFolders.update(id, { name: body.name }, auth.payload.tenantId);
     if (!updated) {
       return NextResponse.json({ error: "Folder not found" }, { status: 404 });
     }
@@ -47,7 +47,7 @@ export async function DELETE(
       );
     }
 
-    const deleted = await dbDocumentFolders.delete(id);
+    const deleted = await dbDocumentFolders.delete(id, auth.payload.tenantId);
     if (!deleted) {
       return NextResponse.json({ error: "Folder not found" }, { status: 404 });
     }
