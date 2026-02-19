@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { dbQualityDocsV2, dbQualityTemplates } from "@/lib/db";
-import { verifySessionToken } from "@/lib/auth";
+import { requireAuth } from "@/lib/api-auth";
 import { v4 as uuidv4 } from "uuid";
 import type { QualityDocumentV2, QualityFieldValue, QualityDocRowV2 } from "@/lib/schemas";
 
@@ -12,26 +12,16 @@ function generateDocId(): string {
 }
 
 export async function GET(request: NextRequest) {
+  const auth = await requireAuth(request, ["worker", "quality_tech", "admin", "owner"]);
+  if (!auth.ok) return auth.response;
+  const tenantId = auth.payload.tenantId;
+
   try {
-    const sessionCookie = request.cookies.get("plantops_session");
-    if (!sessionCookie) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
-    const payload = await verifySessionToken(sessionCookie.value);
-    if (!payload) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
-    if (!["worker", "quality_tech", "admin", "owner"].includes(payload.role)) {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-    }
-
     const { searchParams } = new URL(request.url);
     const status = searchParams.get("status") || undefined;
     const templateId = searchParams.get("templateId") || undefined;
 
-    const docs = await dbQualityDocsV2.getAll({ status, templateId });
+    const docs = await dbQualityDocsV2.getAll(tenantId, { status, templateId });
     return NextResponse.json(docs);
   } catch (error) {
     console.error("Error fetching quality docs v2:", error);
@@ -40,21 +30,11 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
+  const auth = await requireAuth(request, ["quality_tech", "admin", "owner"]);
+  if (!auth.ok) return auth.response;
+  const tenantId = auth.payload.tenantId;
+
   try {
-    const sessionCookie = request.cookies.get("plantops_session");
-    if (!sessionCookie) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
-    const payload = await verifySessionToken(sessionCookie.value);
-    if (!payload) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
-    if (!["quality_tech", "admin", "owner"].includes(payload.role)) {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-    }
-
     const body = await request.json();
     const { templateId, rowCount, headerValues } = body;
 
@@ -71,6 +51,11 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Template is inactive" }, { status: 400 });
     }
 
+    // Validate template belongs to same tenant
+    if (tenantId !== null && template.tenantId && template.tenantId !== tenantId) {
+      return NextResponse.json({ error: "Template not found" }, { status: 404 });
+    }
+
     const count = rowCount || template.defaultRowCount;
     if (template.minRowCount && count < template.minRowCount) {
       return NextResponse.json({ error: `Minimum ${template.minRowCount} rows required` }, { status: 400 });
@@ -79,7 +64,6 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: `Maximum ${template.maxRowCount} rows allowed` }, { status: 400 });
     }
 
-    // Initialize header values with defaults
     const initialHeaderValues: QualityFieldValue[] = template.headerFields.map((field) => {
       const provided = headerValues?.find((v: QualityFieldValue) => v.fieldId === field.id);
       return {
@@ -93,7 +77,6 @@ export async function POST(request: NextRequest) {
       };
     });
 
-    // Initialize empty rows
     const rows: QualityDocRowV2[] = Array.from({ length: count }, (_, i) => ({
       serialNumber: i + 1,
       values: template.rowFields.map((field) => ({
@@ -118,7 +101,7 @@ export async function POST(request: NextRequest) {
       updatedAt: now,
     };
 
-    await dbQualityDocsV2.create(doc);
+    await dbQualityDocsV2.create(doc, tenantId);
 
     return NextResponse.json({ docId: doc.docId, id: doc.id }, { status: 201 });
   } catch (error) {

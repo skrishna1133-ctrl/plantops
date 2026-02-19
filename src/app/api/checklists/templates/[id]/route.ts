@@ -1,28 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
 import { dbTemplates } from "@/lib/db";
-import { verifySessionToken } from "@/lib/auth";
+import { requireAuth } from "@/lib/api-auth";
 
 export async function PATCH(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const auth = await requireAuth(request, ["admin", "owner"]);
+  if (!auth.ok) return auth.response;
+
   try {
-    // Verify authentication
-    const sessionCookie = request.cookies.get("plantops_session");
-    if (!sessionCookie) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
-    const payload = await verifySessionToken(sessionCookie.value);
-    if (!payload) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
-    // Check role - only admin or owner can modify templates
-    if (!["admin", "owner"].includes(payload.role)) {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-    }
-
     const { id } = await params;
     const body = await request.json();
 
@@ -52,23 +39,10 @@ export async function DELETE(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const auth = await requireAuth(request, ["admin", "owner"]);
+  if (!auth.ok) return auth.response;
+
   try {
-    // Verify authentication
-    const sessionCookie = request.cookies.get("plantops_session");
-    if (!sessionCookie) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
-    const payload = await verifySessionToken(sessionCookie.value);
-    if (!payload) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
-    // Check role - only admin or owner can delete templates
-    if (!["admin", "owner"].includes(payload.role)) {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-    }
-
     const { id } = await params;
     const deleted = await dbTemplates.delete(id);
 

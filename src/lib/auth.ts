@@ -27,10 +27,11 @@ async function hmacSign(message: string, secret: string): Promise<string> {
 export interface SessionPayload {
   userId: string;
   role: UserRole;
+  tenantId: string | null;
 }
 
 export async function createSessionToken(payload: SessionPayload): Promise<string> {
-  const raw = `${payload.userId}:${payload.role}:${Date.now()}`;
+  const raw = `${payload.userId}:${payload.role}:${payload.tenantId ?? ""}:${Date.now()}`;
   const payloadB64 = btoa(raw);
   const signature = await hmacSign(raw, SESSION_SECRET);
   return `${payloadB64}.${signature}`;
@@ -45,8 +46,16 @@ export async function verifySessionToken(token: string): Promise<SessionPayload 
     if (expected !== signature) return null;
 
     const parts = raw.split(":");
-    if (parts.length < 3) return null;
-    return { userId: parts[0], role: parts[1] as UserRole };
+    if (parts.length === 4) {
+      // New format: userId:role:tenantId:timestamp
+      const tenantId = parts[2] === "" ? null : parts[2];
+      return { userId: parts[0], role: parts[1] as UserRole, tenantId };
+    }
+    if (parts.length === 3) {
+      // Legacy 3-part format — treat as null tenant for 24h migration window
+      return { userId: parts[0], role: parts[1] as UserRole, tenantId: null };
+    }
+    return null;
   } catch {
     return null;
   }

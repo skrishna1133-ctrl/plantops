@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { put, del } from "@vercel/blob";
 import { dbInstructionDocuments, dbUsers } from "@/lib/db";
-import { verifySessionToken } from "@/lib/auth";
+import { requireAuth } from "@/lib/api-auth";
 import crypto from "crypto";
 import type { UserRole } from "@/lib/schemas";
 
@@ -11,26 +11,18 @@ export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const auth = await requireAuth(request, ["worker", "quality_tech", "engineer", "shipping", "admin", "owner"]);
+  if (!auth.ok) return auth.response;
+
   try {
-    const sessionCookie = request.cookies.get("plantops_session");
-    if (!sessionCookie) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
-    const payload = await verifySessionToken(sessionCookie.value);
-    if (!payload) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
     const { id } = await params;
     const doc = await dbInstructionDocuments.getById(id);
     if (!doc) {
       return NextResponse.json({ error: "Not found" }, { status: 404 });
     }
 
-    // Check role access (admin/owner see all)
-    const isAdmin = ["admin", "owner"].includes(payload.role);
-    if (!isAdmin && !doc.allowedRoles.includes(payload.role)) {
+    const isAdmin = ["admin", "owner", "super_admin"].includes(auth.payload.role);
+    if (!isAdmin && !doc.allowedRoles.includes(auth.payload.role)) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
@@ -45,21 +37,10 @@ export async function PATCH(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const auth = await requireAuth(request, ["admin", "owner", "engineer"]);
+  if (!auth.ok) return auth.response;
+
   try {
-    const sessionCookie = request.cookies.get("plantops_session");
-    if (!sessionCookie) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
-    const payload = await verifySessionToken(sessionCookie.value);
-    if (!payload) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
-    if (!["admin", "owner", "engineer"].includes(payload.role)) {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-    }
-
     const { id } = await params;
     const existing = await dbInstructionDocuments.getById(id);
     if (!existing) {
@@ -69,7 +50,6 @@ export async function PATCH(
     const contentType = request.headers.get("content-type") || "";
 
     if (contentType.includes("multipart/form-data")) {
-      // Re-upload with new file
       const formData = await request.formData();
       const file = formData.get("file") as File | null;
       const title = formData.get("title") as string | null;
@@ -86,7 +66,6 @@ export async function PATCH(
           return NextResponse.json({ error: "File size must be under 50MB" }, { status: 400 });
         }
 
-        // Delete previous blob if exists
         if (existing.previousFileUrl) {
           try {
             await del(existing.previousFileUrl);
@@ -95,12 +74,10 @@ export async function PATCH(
           }
         }
 
-        // Upload new file to blob
         const blob = await put(`documents/${crypto.randomUUID()}_${file.name}`, file, {
           access: "public",
         });
 
-        // Shift current → previous
         updates.previousFileUrl = existing.fileUrl;
         updates.previousFileName = existing.fileName;
         updates.fileUrl = blob.url;
@@ -112,7 +89,7 @@ export async function PATCH(
       if (description !== null) updates.description = description || undefined;
       if (allowedRolesStr) {
         try {
-          updates.allowedRoles = JSON.parse(allowedRolesStr);
+          updates.allowedRoles = JSON.parse(allowedRolesStr) as UserRole[];
         } catch {
           return NextResponse.json({ error: "Invalid allowedRoles format" }, { status: 400 });
         }
@@ -122,7 +99,6 @@ export async function PATCH(
       const updated = await dbInstructionDocuments.update(id, updates);
       return NextResponse.json(updated);
     } else {
-      // JSON body - metadata-only update
       const body = await request.json();
       const updates: Record<string, unknown> = {};
 
@@ -144,28 +120,16 @@ export async function DELETE(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const auth = await requireAuth(request, ["admin", "owner"]);
+  if (!auth.ok) return auth.response;
+
   try {
-    const sessionCookie = request.cookies.get("plantops_session");
-    if (!sessionCookie) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
-    const payload = await verifySessionToken(sessionCookie.value);
-    if (!payload) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
-    if (!["admin", "owner"].includes(payload.role)) {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-    }
-
     const { id } = await params;
     const doc = await dbInstructionDocuments.getById(id);
     if (!doc) {
       return NextResponse.json({ error: "Not found" }, { status: 404 });
     }
 
-    // Delete blob files
     try {
       await del(doc.fileUrl);
     } catch {

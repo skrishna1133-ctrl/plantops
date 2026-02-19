@@ -1,27 +1,29 @@
 import { NextRequest, NextResponse } from "next/server";
-import { verifySessionToken, hashPassword } from "@/lib/auth";
+import { hashPassword } from "@/lib/auth";
 import { dbUsers } from "@/lib/db";
+import { requireAuth } from "@/lib/api-auth";
 import type { UserRole } from "@/lib/schemas";
 
-async function requireAdmin(request: NextRequest) {
-  const session = request.cookies.get("plantops_session")?.value;
-  if (!session) return null;
-  const payload = await verifySessionToken(session);
-  if (!payload || (payload.role !== "admin" && payload.role !== "owner")) return null;
-  return payload;
-}
-
 export async function GET(request: NextRequest) {
-  const auth = await requireAdmin(request);
-  if (!auth) return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
+  const auth = await requireAuth(request, ["admin", "owner"]);
+  if (!auth.ok) return auth.response;
+  const tenantId = auth.payload.tenantId;
 
-  const users = await dbUsers.getAll();
+  // super_admin with ?all=true returns all users with tenant names
+  const { searchParams } = new URL(request.url);
+  if (searchParams.get("all") === "true" && auth.payload.role === "super_admin") {
+    const users = await dbUsers.getAllWithTenantName();
+    return NextResponse.json(users);
+  }
+
+  const users = await dbUsers.getAll(tenantId);
   return NextResponse.json(users);
 }
 
 export async function POST(request: NextRequest) {
-  const auth = await requireAdmin(request);
-  if (!auth) return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
+  const auth = await requireAuth(request, ["admin", "owner"]);
+  if (!auth.ok) return auth.response;
+  const tenantId = auth.payload.tenantId;
 
   try {
     const body = await request.json();
@@ -35,10 +37,20 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Password must be at least 4 characters" }, { status: 400 });
     }
 
+    // Prevent creating super_admin unless caller is super_admin
+    if (role === "super_admin" && auth.payload.role !== "super_admin") {
+      return NextResponse.json({ error: "Cannot create super_admin user" }, { status: 403 });
+    }
+
     const validRoles: UserRole[] = ["worker", "quality_tech", "engineer", "shipping", "admin", "owner"];
-    if (!validRoles.includes(role)) {
+    if (auth.payload.role !== "super_admin" && !validRoles.includes(role)) {
       return NextResponse.json({ error: "Invalid role" }, { status: 400 });
     }
+
+    // super_admin can pass body.tenantId to create user in a specific tenant
+    const targetTenantId = auth.payload.role === "super_admin" && body.tenantId
+      ? body.tenantId
+      : tenantId;
 
     const passwordHash = await hashPassword(password);
     const now = new Date().toISOString();
@@ -51,9 +63,10 @@ export async function POST(request: NextRequest) {
       fullName,
       role,
       active: true,
+      tenantId: targetTenantId,
       createdAt: now,
       updatedAt: now,
-    });
+    }, targetTenantId);
 
     return NextResponse.json({ id, username, fullName, role });
   } catch (error) {

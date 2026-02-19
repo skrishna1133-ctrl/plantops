@@ -240,6 +240,7 @@ export const userRoles = [
   "shipping",
   "admin",
   "owner",
+  "super_admin",
 ] as const;
 
 export type UserRole = (typeof userRoles)[number];
@@ -251,6 +252,7 @@ export const userRoleLabels: Record<UserRole, string> = {
   shipping: "Shipping",
   admin: "Admin",
   owner: "Owner",
+  super_admin: "Super Admin",
 };
 
 export interface User {
@@ -259,6 +261,7 @@ export interface User {
   fullName: string;
   role: UserRole;
   active: boolean;
+  tenantId: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -296,6 +299,16 @@ export interface Shipment {
   status: ShipmentStatus;
   createdAt: string;
   updatedAt: string;
+}
+
+// ─── Tenants ───
+
+export interface Tenant {
+  id: string;
+  name: string;
+  code: string;
+  active: boolean;
+  createdAt: string;
 }
 
 // ─── Instructions/Documents ───

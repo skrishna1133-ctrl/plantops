@@ -16,8 +16,11 @@ import type {
   QualityDocRowV2,
   DocumentFolder,
   InstructionDocument,
+  Tenant,
 } from "./schemas";
 import { getFlags } from "./flags";
+
+const FPI_ID = "00000000-0000-0000-0000-000000000001";
 
 // ─── Table Initialization ───
 
@@ -25,6 +28,16 @@ let tablesInitialized = false;
 
 async function initTables() {
   if (tablesInitialized) return;
+
+  await sql`
+    CREATE TABLE IF NOT EXISTS tenants (
+      id UUID PRIMARY KEY,
+      name VARCHAR(100) NOT NULL,
+      code VARCHAR(50) NOT NULL UNIQUE,
+      active BOOLEAN DEFAULT true,
+      created_at VARCHAR(50) NOT NULL
+    )
+  `;
 
   await sql`
     CREATE TABLE IF NOT EXISTS incidents (
@@ -185,25 +198,99 @@ async function initTables() {
     )
   `;
 
+  // ── Tenant isolation columns (idempotent migrations) ──
+  await sql`ALTER TABLE incidents ADD COLUMN IF NOT EXISTS tenant_id UUID`;
+  await sql`ALTER TABLE checklist_templates ADD COLUMN IF NOT EXISTS tenant_id UUID`;
+  await sql`ALTER TABLE checklist_submissions ADD COLUMN IF NOT EXISTS tenant_id UUID`;
+  await sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS tenant_id UUID`;
+  await sql`ALTER TABLE shipments ADD COLUMN IF NOT EXISTS tenant_id UUID`;
+  await sql`ALTER TABLE quality_documents ADD COLUMN IF NOT EXISTS tenant_id UUID`;
+  await sql`ALTER TABLE document_folders ADD COLUMN IF NOT EXISTS tenant_id UUID`;
+  await sql`ALTER TABLE instruction_documents ADD COLUMN IF NOT EXISTS tenant_id UUID`;
+
+  // ── Seed FPI tenant ──
+  const now = new Date().toISOString();
+  await sql`
+    INSERT INTO tenants (id, name, code, active, created_at)
+    VALUES (${FPI_ID}, 'FPI', 'FPI', true, ${now})
+    ON CONFLICT (code) DO NOTHING
+  `;
+
+  // ── Migrate existing data to FPI tenant ──
+  await sql`UPDATE incidents SET tenant_id = ${FPI_ID} WHERE tenant_id IS NULL`;
+  await sql`UPDATE checklist_templates SET tenant_id = ${FPI_ID} WHERE tenant_id IS NULL`;
+  await sql`UPDATE checklist_submissions SET tenant_id = ${FPI_ID} WHERE tenant_id IS NULL`;
+  await sql`UPDATE users SET tenant_id = ${FPI_ID} WHERE tenant_id IS NULL AND role != 'super_admin'`;
+  await sql`UPDATE shipments SET tenant_id = ${FPI_ID} WHERE tenant_id IS NULL`;
+  await sql`UPDATE quality_documents SET tenant_id = ${FPI_ID} WHERE tenant_id IS NULL`;
+  await sql`UPDATE quality_templates SET tenant_id = ${FPI_ID} WHERE tenant_id IS NULL`;
+  await sql`UPDATE quality_documents_v2 SET tenant_id = ${FPI_ID} WHERE tenant_id IS NULL`;
+  await sql`UPDATE document_folders SET tenant_id = ${FPI_ID} WHERE tenant_id IS NULL`;
+  await sql`UPDATE instruction_documents SET tenant_id = ${FPI_ID} WHERE tenant_id IS NULL`;
+
   tablesInitialized = true;
+}
+
+// ─── Tenants ───
+
+export const dbTenants = {
+  async getAll(): Promise<Tenant[]> {
+    await initTables();
+    const { rows } = await sql`SELECT * FROM tenants ORDER BY name ASC`;
+    return rows.map(mapTenant);
+  },
+
+  async getById(id: string): Promise<Tenant | null> {
+    await initTables();
+    const { rows } = await sql`SELECT * FROM tenants WHERE id = ${id}`;
+    return rows.length > 0 ? mapTenant(rows[0]) : null;
+  },
+
+  async getByCode(code: string): Promise<Tenant | null> {
+    await initTables();
+    const { rows } = await sql`SELECT * FROM tenants WHERE code = ${code} AND active = true`;
+    return rows.length > 0 ? mapTenant(rows[0]) : null;
+  },
+
+  async create(tenant: Tenant): Promise<void> {
+    await initTables();
+    await sql`
+      INSERT INTO tenants (id, name, code, active, created_at)
+      VALUES (${tenant.id}, ${tenant.name}, ${tenant.code}, ${tenant.active}, ${tenant.createdAt})
+    `;
+  },
+};
+
+function mapTenant(row: Record<string, unknown>): Tenant {
+  return {
+    id: row.id as string,
+    name: row.name as string,
+    code: row.code as string,
+    active: row.active as boolean,
+    createdAt: row.created_at as string,
+  };
 }
 
 // ─── Incidents ───
 
 export const dbIncidents = {
-  async getAll(): Promise<IncidentReport[]> {
+  async getAll(tenantId: string | null): Promise<IncidentReport[]> {
     await initTables();
-    const { rows } = await sql`
-      SELECT * FROM incidents ORDER BY created_at DESC
-    `;
+    if (tenantId !== null) {
+      const { rows } = await sql`
+        SELECT * FROM incidents WHERE tenant_id = ${tenantId} ORDER BY created_at DESC
+      `;
+      return rows.map(mapIncident);
+    }
+    const { rows } = await sql`SELECT * FROM incidents ORDER BY created_at DESC`;
     return rows.map(mapIncident);
   },
 
-  async create(incident: IncidentReport): Promise<void> {
+  async create(incident: IncidentReport, tenantId: string | null): Promise<void> {
     await initTables();
     await sql`
-      INSERT INTO incidents (id, ticket_id, reporter_name, plant, category, description, criticality, incident_date, photo_url, status, created_at)
-      VALUES (${incident.id}, ${incident.ticketId}, ${incident.reporterName}, ${incident.plant}, ${incident.category}, ${incident.description}, ${incident.criticality}, ${incident.incidentDate}, ${incident.photoUrl || null}, ${incident.status}, ${incident.createdAt})
+      INSERT INTO incidents (id, ticket_id, reporter_name, plant, category, description, criticality, incident_date, photo_url, status, created_at, tenant_id)
+      VALUES (${incident.id}, ${incident.ticketId}, ${incident.reporterName}, ${incident.plant}, ${incident.category}, ${incident.description}, ${incident.criticality}, ${incident.incidentDate}, ${incident.photoUrl || null}, ${incident.status}, ${incident.createdAt}, ${tenantId})
     `;
   },
 
@@ -220,9 +307,7 @@ export const dbIncidents = {
 
   async delete(id: string): Promise<boolean> {
     await initTables();
-    const { rowCount } = await sql`
-      DELETE FROM incidents WHERE id = ${id}
-    `;
+    const { rowCount } = await sql`DELETE FROM incidents WHERE id = ${id}`;
     return (rowCount ?? 0) > 0;
   },
 };
@@ -230,68 +315,70 @@ export const dbIncidents = {
 // ─── Checklist Templates ───
 
 export const dbTemplates = {
-  async getAll(filters?: {
-    type?: string;
-    active?: boolean;
-  }): Promise<ChecklistTemplate[]> {
+  async getAll(
+    tenantId: string | null,
+    filters?: { type?: string; active?: boolean }
+  ): Promise<ChecklistTemplate[]> {
     await initTables();
+    const type = filters?.type;
+    const active = filters?.active;
 
-    if (filters?.type && filters?.active !== undefined) {
-      const { rows } = await sql`
-        SELECT * FROM checklist_templates WHERE type = ${filters.type} AND active = ${filters.active} ORDER BY created_at DESC
-      `;
-      return rows.map(mapTemplate);
-    }
-    if (filters?.type) {
-      const { rows } = await sql`
-        SELECT * FROM checklist_templates WHERE type = ${filters.type} ORDER BY created_at DESC
-      `;
-      return rows.map(mapTemplate);
-    }
-    if (filters?.active !== undefined) {
-      const { rows } = await sql`
-        SELECT * FROM checklist_templates WHERE active = ${filters.active} ORDER BY created_at DESC
-      `;
+    if (tenantId !== null) {
+      if (type !== undefined && active !== undefined) {
+        const { rows } = await sql`SELECT * FROM checklist_templates WHERE tenant_id = ${tenantId} AND type = ${type} AND active = ${active} ORDER BY created_at DESC`;
+        return rows.map(mapTemplate);
+      }
+      if (type !== undefined) {
+        const { rows } = await sql`SELECT * FROM checklist_templates WHERE tenant_id = ${tenantId} AND type = ${type} ORDER BY created_at DESC`;
+        return rows.map(mapTemplate);
+      }
+      if (active !== undefined) {
+        const { rows } = await sql`SELECT * FROM checklist_templates WHERE tenant_id = ${tenantId} AND active = ${active} ORDER BY created_at DESC`;
+        return rows.map(mapTemplate);
+      }
+      const { rows } = await sql`SELECT * FROM checklist_templates WHERE tenant_id = ${tenantId} ORDER BY created_at DESC`;
       return rows.map(mapTemplate);
     }
 
-    const { rows } = await sql`
-      SELECT * FROM checklist_templates ORDER BY created_at DESC
-    `;
+    // super_admin: no tenant filter
+    if (type !== undefined && active !== undefined) {
+      const { rows } = await sql`SELECT * FROM checklist_templates WHERE type = ${type} AND active = ${active} ORDER BY created_at DESC`;
+      return rows.map(mapTemplate);
+    }
+    if (type !== undefined) {
+      const { rows } = await sql`SELECT * FROM checklist_templates WHERE type = ${type} ORDER BY created_at DESC`;
+      return rows.map(mapTemplate);
+    }
+    if (active !== undefined) {
+      const { rows } = await sql`SELECT * FROM checklist_templates WHERE active = ${active} ORDER BY created_at DESC`;
+      return rows.map(mapTemplate);
+    }
+    const { rows } = await sql`SELECT * FROM checklist_templates ORDER BY created_at DESC`;
     return rows.map(mapTemplate);
   },
 
   async getById(id: string): Promise<ChecklistTemplate | null> {
     await initTables();
-    const { rows } = await sql`
-      SELECT * FROM checklist_templates WHERE id = ${id}
-    `;
+    const { rows } = await sql`SELECT * FROM checklist_templates WHERE id = ${id}`;
     return rows.length > 0 ? mapTemplate(rows[0]) : null;
   },
 
-  async create(template: ChecklistTemplate): Promise<void> {
+  async create(template: ChecklistTemplate, tenantId: string | null): Promise<void> {
     await initTables();
     await sql`
-      INSERT INTO checklist_templates (id, title, type, description, items, active, created_at)
-      VALUES (${template.id}, ${template.title}, ${template.type}, ${template.description || null}, ${JSON.stringify(template.items)}, ${template.active}, ${template.createdAt})
+      INSERT INTO checklist_templates (id, title, type, description, items, active, created_at, tenant_id)
+      VALUES (${template.id}, ${template.title}, ${template.type}, ${template.description || null}, ${JSON.stringify(template.items)}, ${template.active}, ${template.createdAt}, ${tenantId})
     `;
   },
 
-  async update(
-    id: string,
-    data: Partial<ChecklistTemplate>
-  ): Promise<boolean> {
+  async update(id: string, data: Partial<ChecklistTemplate>): Promise<boolean> {
     await initTables();
     if (data.active !== undefined) {
-      const { rowCount } = await sql`
-        UPDATE checklist_templates SET active = ${data.active} WHERE id = ${id}
-      `;
+      const { rowCount } = await sql`UPDATE checklist_templates SET active = ${data.active} WHERE id = ${id}`;
       return (rowCount ?? 0) > 0;
     }
     if (data.title) {
-      const { rowCount } = await sql`
-        UPDATE checklist_templates SET title = ${data.title} WHERE id = ${id}
-      `;
+      const { rowCount } = await sql`UPDATE checklist_templates SET title = ${data.title} WHERE id = ${id}`;
       return (rowCount ?? 0) > 0;
     }
     return false;
@@ -299,9 +386,7 @@ export const dbTemplates = {
 
   async delete(id: string): Promise<boolean> {
     await initTables();
-    const { rowCount } = await sql`
-      DELETE FROM checklist_templates WHERE id = ${id}
-    `;
+    const { rowCount } = await sql`DELETE FROM checklist_templates WHERE id = ${id}`;
     return (rowCount ?? 0) > 0;
   },
 };
@@ -309,60 +394,76 @@ export const dbTemplates = {
 // ─── Checklist Submissions ───
 
 export const dbSubmissions = {
-  async getAll(filters?: {
-    type?: string;
-    shift?: string;
-  }): Promise<ChecklistSubmission[]> {
+  async getAll(
+    tenantId: string | null,
+    filters?: { type?: string; shift?: string }
+  ): Promise<ChecklistSubmission[]> {
     await initTables();
+    const type = filters?.type;
+    const shift = filters?.shift;
 
-    if (filters?.type && filters?.shift) {
-      const { rows } = await sql`
-        SELECT * FROM checklist_submissions WHERE template_type = ${filters.type} AND shift = ${filters.shift} ORDER BY submitted_at DESC
-      `;
-      return rows.map(mapSubmission);
-    }
-    if (filters?.type) {
-      const { rows } = await sql`
-        SELECT * FROM checklist_submissions WHERE template_type = ${filters.type} ORDER BY submitted_at DESC
-      `;
-      return rows.map(mapSubmission);
-    }
-    if (filters?.shift) {
-      const { rows } = await sql`
-        SELECT * FROM checklist_submissions WHERE shift = ${filters.shift} ORDER BY submitted_at DESC
-      `;
+    if (tenantId !== null) {
+      if (type !== undefined && shift !== undefined) {
+        const { rows } = await sql`SELECT * FROM checklist_submissions WHERE tenant_id = ${tenantId} AND template_type = ${type} AND shift = ${shift} ORDER BY submitted_at DESC`;
+        return rows.map(mapSubmission);
+      }
+      if (type !== undefined) {
+        const { rows } = await sql`SELECT * FROM checklist_submissions WHERE tenant_id = ${tenantId} AND template_type = ${type} ORDER BY submitted_at DESC`;
+        return rows.map(mapSubmission);
+      }
+      if (shift !== undefined) {
+        const { rows } = await sql`SELECT * FROM checklist_submissions WHERE tenant_id = ${tenantId} AND shift = ${shift} ORDER BY submitted_at DESC`;
+        return rows.map(mapSubmission);
+      }
+      const { rows } = await sql`SELECT * FROM checklist_submissions WHERE tenant_id = ${tenantId} ORDER BY submitted_at DESC`;
       return rows.map(mapSubmission);
     }
 
-    const { rows } = await sql`
-      SELECT * FROM checklist_submissions ORDER BY submitted_at DESC
-    `;
+    // super_admin: no tenant filter
+    if (type !== undefined && shift !== undefined) {
+      const { rows } = await sql`SELECT * FROM checklist_submissions WHERE template_type = ${type} AND shift = ${shift} ORDER BY submitted_at DESC`;
+      return rows.map(mapSubmission);
+    }
+    if (type !== undefined) {
+      const { rows } = await sql`SELECT * FROM checklist_submissions WHERE template_type = ${type} ORDER BY submitted_at DESC`;
+      return rows.map(mapSubmission);
+    }
+    if (shift !== undefined) {
+      const { rows } = await sql`SELECT * FROM checklist_submissions WHERE shift = ${shift} ORDER BY submitted_at DESC`;
+      return rows.map(mapSubmission);
+    }
+    const { rows } = await sql`SELECT * FROM checklist_submissions ORDER BY submitted_at DESC`;
     return rows.map(mapSubmission);
   },
 
-  async create(submission: ChecklistSubmission): Promise<void> {
+  async create(submission: ChecklistSubmission, tenantId: string | null): Promise<void> {
     await initTables();
     await sql`
-      INSERT INTO checklist_submissions (id, submission_id, template_id, template_title, template_type, person_name, shift, responses, notes, submitted_at)
-      VALUES (${submission.id}, ${submission.submissionId}, ${submission.templateId}, ${submission.templateTitle}, ${submission.templateType}, ${submission.personName}, ${submission.shift}, ${JSON.stringify(submission.responses)}, ${submission.notes || null}, ${submission.submittedAt})
+      INSERT INTO checklist_submissions (id, submission_id, template_id, template_title, template_type, person_name, shift, responses, notes, submitted_at, tenant_id)
+      VALUES (${submission.id}, ${submission.submissionId}, ${submission.templateId}, ${submission.templateTitle}, ${submission.templateType}, ${submission.personName}, ${submission.shift}, ${JSON.stringify(submission.responses)}, ${submission.notes || null}, ${submission.submittedAt}, ${tenantId})
     `;
   },
 
   async delete(id: string): Promise<boolean> {
     await initTables();
-    const { rowCount } = await sql`
-      DELETE FROM checklist_submissions WHERE id = ${id}
-    `;
+    const { rowCount } = await sql`DELETE FROM checklist_submissions WHERE id = ${id}`;
     return (rowCount ?? 0) > 0;
   },
 
-  async deleteCleanBefore(cutoffDate: string): Promise<number> {
-    // This needs to be done in app logic since we check JSONB flags
-    // We'll fetch, check flags, and delete clean ones
+  async deleteCleanBefore(cutoffDate: string, tenantId: string | null): Promise<number> {
     await initTables();
-    const { rows } = await sql`
-      SELECT * FROM checklist_submissions WHERE submitted_at < ${cutoffDate}
-    `;
+    let rows: Record<string, unknown>[];
+    if (tenantId !== null) {
+      const result = await sql`
+        SELECT * FROM checklist_submissions WHERE submitted_at < ${cutoffDate} AND tenant_id = ${tenantId}
+      `;
+      rows = result.rows;
+    } else {
+      const result = await sql`
+        SELECT * FROM checklist_submissions WHERE submitted_at < ${cutoffDate}
+      `;
+      rows = result.rows;
+    }
     let removed = 0;
     for (const row of rows) {
       const sub = mapSubmission(row);
@@ -423,33 +524,35 @@ function mapSubmission(row: Record<string, unknown>): ChecklistSubmission {
 // ─── Quality Documents ───
 
 export const dbQualityDocs = {
-  async getAll(filters?: { status?: string }): Promise<QualityDocument[]> {
+  async getAll(tenantId: string | null, filters?: { status?: string }): Promise<QualityDocument[]> {
     await initTables();
-    if (filters?.status) {
-      const { rows } = await sql`
-        SELECT * FROM quality_documents WHERE status = ${filters.status} ORDER BY created_at DESC
-      `;
+    if (tenantId !== null) {
+      if (filters?.status) {
+        const { rows } = await sql`SELECT * FROM quality_documents WHERE tenant_id = ${tenantId} AND status = ${filters.status} ORDER BY created_at DESC`;
+        return rows.map(mapQualityDoc);
+      }
+      const { rows } = await sql`SELECT * FROM quality_documents WHERE tenant_id = ${tenantId} ORDER BY created_at DESC`;
       return rows.map(mapQualityDoc);
     }
-    const { rows } = await sql`
-      SELECT * FROM quality_documents ORDER BY created_at DESC
-    `;
+    if (filters?.status) {
+      const { rows } = await sql`SELECT * FROM quality_documents WHERE status = ${filters.status} ORDER BY created_at DESC`;
+      return rows.map(mapQualityDoc);
+    }
+    const { rows } = await sql`SELECT * FROM quality_documents ORDER BY created_at DESC`;
     return rows.map(mapQualityDoc);
   },
 
   async getById(id: string): Promise<QualityDocument | null> {
     await initTables();
-    const { rows } = await sql`
-      SELECT * FROM quality_documents WHERE id = ${id}
-    `;
+    const { rows } = await sql`SELECT * FROM quality_documents WHERE id = ${id}`;
     return rows.length > 0 ? mapQualityDoc(rows[0]) : null;
   },
 
-  async create(doc: QualityDocument): Promise<void> {
+  async create(doc: QualityDocument, tenantId: string | null): Promise<void> {
     await initTables();
     await sql`
-      INSERT INTO quality_documents (id, doc_id, po_number, material_code, customer_name, customer_po, tare_weight, row_count, person_name, rows, status, created_at, updated_at)
-      VALUES (${doc.id}, ${doc.docId}, ${doc.poNumber}, ${doc.materialCode}, ${doc.customerName}, ${doc.customerPo}, ${doc.tareWeight}, ${doc.rowCount}, ${doc.personName || null}, ${JSON.stringify(doc.rows)}, ${doc.status}, ${doc.createdAt}, ${doc.updatedAt})
+      INSERT INTO quality_documents (id, doc_id, po_number, material_code, customer_name, customer_po, tare_weight, row_count, person_name, rows, status, created_at, updated_at, tenant_id)
+      VALUES (${doc.id}, ${doc.docId}, ${doc.poNumber}, ${doc.materialCode}, ${doc.customerName}, ${doc.customerPo}, ${doc.tareWeight}, ${doc.rowCount}, ${doc.personName || null}, ${JSON.stringify(doc.rows)}, ${doc.status}, ${doc.createdAt}, ${doc.updatedAt}, ${tenantId})
     `;
   },
 
@@ -486,29 +589,74 @@ export const dbQualityDocs = {
 
   async delete(id: string): Promise<boolean> {
     await initTables();
-    const { rowCount } = await sql`
-      DELETE FROM quality_documents WHERE id = ${id}
-    `;
+    const { rowCount } = await sql`DELETE FROM quality_documents WHERE id = ${id}`;
     return (rowCount ?? 0) > 0;
   },
 };
 
+function mapQualityDoc(row: Record<string, unknown>): QualityDocument {
+  return {
+    id: row.id as string,
+    docId: row.doc_id as string,
+    poNumber: row.po_number as string,
+    materialCode: row.material_code as string,
+    customerName: row.customer_name as string,
+    customerPo: row.customer_po as string,
+    tareWeight: Number(row.tare_weight),
+    rowCount: row.row_count as number,
+    personName: (row.person_name as string) || undefined,
+    rows: typeof row.rows === "string" ? JSON.parse(row.rows as string) : row.rows as QualityDocument["rows"],
+    status: row.status as QualityDocument["status"],
+    createdAt: row.created_at as string,
+    updatedAt: row.updated_at as string,
+  };
+}
+
 // ─── Users ───
 
 export const dbUsers = {
-  async getAll(): Promise<User[]> {
+  async getAll(tenantId: string | null): Promise<User[]> {
     await initTables();
+    if (tenantId !== null) {
+      const { rows } = await sql`
+        SELECT id, username, full_name, role, active, tenant_id, created_at, updated_at FROM users WHERE tenant_id = ${tenantId} ORDER BY created_at DESC
+      `;
+      return rows.map(mapUser);
+    }
     const { rows } = await sql`
-      SELECT id, username, full_name, role, active, created_at, updated_at FROM users ORDER BY created_at DESC
+      SELECT id, username, full_name, role, active, tenant_id, created_at, updated_at FROM users ORDER BY created_at DESC
     `;
     return rows.map(mapUser);
   },
 
-  async getByUsername(username: string): Promise<(User & { passwordHash: string }) | null> {
+  async getAllWithTenantName(): Promise<(User & { tenantName: string | null })[]> {
     await initTables();
     const { rows } = await sql`
-      SELECT * FROM users WHERE username = ${username} AND active = true
+      SELECT u.id, u.username, u.full_name, u.role, u.active, u.tenant_id, u.created_at, u.updated_at, t.name as tenant_name
+      FROM users u
+      LEFT JOIN tenants t ON u.tenant_id = t.id
+      ORDER BY u.created_at DESC
     `;
+    return rows.map((row) => ({
+      ...mapUser(row),
+      tenantName: (row.tenant_name as string) || null,
+    }));
+  },
+
+  async getByUsername(username: string, tenantId: string | null): Promise<(User & { passwordHash: string }) | null> {
+    await initTables();
+    let rows: Record<string, unknown>[];
+    if (tenantId !== null) {
+      const result = await sql`
+        SELECT * FROM users WHERE username = ${username} AND tenant_id = ${tenantId} AND active = true
+      `;
+      rows = result.rows;
+    } else {
+      const result = await sql`
+        SELECT * FROM users WHERE username = ${username} AND tenant_id IS NULL AND active = true
+      `;
+      rows = result.rows;
+    }
     if (rows.length === 0) return null;
     const row = rows[0];
     return { ...mapUser(row), passwordHash: row.password_hash as string };
@@ -517,16 +665,16 @@ export const dbUsers = {
   async getById(id: string): Promise<User | null> {
     await initTables();
     const { rows } = await sql`
-      SELECT id, username, full_name, role, active, created_at, updated_at FROM users WHERE id = ${id}
+      SELECT id, username, full_name, role, active, tenant_id, created_at, updated_at FROM users WHERE id = ${id}
     `;
     return rows.length > 0 ? mapUser(rows[0]) : null;
   },
 
-  async create(user: User & { passwordHash: string }): Promise<void> {
+  async create(user: User & { passwordHash: string }, tenantId: string | null): Promise<void> {
     await initTables();
     await sql`
-      INSERT INTO users (id, username, password_hash, full_name, role, active, created_at, updated_at)
-      VALUES (${user.id}, ${user.username}, ${user.passwordHash}, ${user.fullName}, ${user.role}, ${user.active}, ${user.createdAt}, ${user.updatedAt})
+      INSERT INTO users (id, username, password_hash, full_name, role, active, tenant_id, created_at, updated_at)
+      VALUES (${user.id}, ${user.username}, ${user.passwordHash}, ${user.fullName}, ${user.role}, ${user.active}, ${tenantId}, ${user.createdAt}, ${user.updatedAt})
     `;
   },
 
@@ -554,9 +702,7 @@ export const dbUsers = {
 
   async delete(id: string): Promise<boolean> {
     await initTables();
-    const { rowCount } = await sql`
-      DELETE FROM users WHERE id = ${id}
-    `;
+    const { rowCount } = await sql`DELETE FROM users WHERE id = ${id}`;
     return (rowCount ?? 0) > 0;
   },
 };
@@ -568,6 +714,7 @@ function mapUser(row: Record<string, unknown>): User {
     fullName: row.full_name as string,
     role: row.role as UserRole,
     active: row.active as boolean,
+    tenantId: (row.tenant_id as string) || null,
     createdAt: row.created_at as string,
     updatedAt: row.updated_at as string,
   };
@@ -576,45 +723,56 @@ function mapUser(row: Record<string, unknown>): User {
 // ─── Shipments ───
 
 export const dbShipments = {
-  async getAll(filters?: { type?: string; status?: string }): Promise<Shipment[]> {
+  async getAll(tenantId: string | null, filters?: { type?: string; status?: string }): Promise<Shipment[]> {
     await initTables();
-    if (filters?.type && filters?.status) {
-      const { rows } = await sql`
-        SELECT * FROM shipments WHERE type = ${filters.type} AND status = ${filters.status} ORDER BY created_at DESC
-      `;
+    const type = filters?.type;
+    const status = filters?.status;
+
+    if (tenantId !== null) {
+      if (type !== undefined && status !== undefined) {
+        const { rows } = await sql`SELECT * FROM shipments WHERE tenant_id = ${tenantId} AND type = ${type} AND status = ${status} ORDER BY created_at DESC`;
+        return rows.map(mapShipment);
+      }
+      if (type !== undefined) {
+        const { rows } = await sql`SELECT * FROM shipments WHERE tenant_id = ${tenantId} AND type = ${type} ORDER BY created_at DESC`;
+        return rows.map(mapShipment);
+      }
+      if (status !== undefined) {
+        const { rows } = await sql`SELECT * FROM shipments WHERE tenant_id = ${tenantId} AND status = ${status} ORDER BY created_at DESC`;
+        return rows.map(mapShipment);
+      }
+      const { rows } = await sql`SELECT * FROM shipments WHERE tenant_id = ${tenantId} ORDER BY created_at DESC`;
       return rows.map(mapShipment);
     }
-    if (filters?.type) {
-      const { rows } = await sql`
-        SELECT * FROM shipments WHERE type = ${filters.type} ORDER BY created_at DESC
-      `;
+
+    // super_admin: no tenant filter
+    if (type !== undefined && status !== undefined) {
+      const { rows } = await sql`SELECT * FROM shipments WHERE type = ${type} AND status = ${status} ORDER BY created_at DESC`;
       return rows.map(mapShipment);
     }
-    if (filters?.status) {
-      const { rows } = await sql`
-        SELECT * FROM shipments WHERE status = ${filters.status} ORDER BY created_at DESC
-      `;
+    if (type !== undefined) {
+      const { rows } = await sql`SELECT * FROM shipments WHERE type = ${type} ORDER BY created_at DESC`;
       return rows.map(mapShipment);
     }
-    const { rows } = await sql`
-      SELECT * FROM shipments ORDER BY created_at DESC
-    `;
+    if (status !== undefined) {
+      const { rows } = await sql`SELECT * FROM shipments WHERE status = ${status} ORDER BY created_at DESC`;
+      return rows.map(mapShipment);
+    }
+    const { rows } = await sql`SELECT * FROM shipments ORDER BY created_at DESC`;
     return rows.map(mapShipment);
   },
 
   async getById(id: string): Promise<Shipment | null> {
     await initTables();
-    const { rows } = await sql`
-      SELECT * FROM shipments WHERE id = ${id}
-    `;
+    const { rows } = await sql`SELECT * FROM shipments WHERE id = ${id}`;
     return rows.length > 0 ? mapShipment(rows[0]) : null;
   },
 
-  async create(shipment: Shipment): Promise<void> {
+  async create(shipment: Shipment, tenantId: string | null): Promise<void> {
     await initTables();
     await sql`
-      INSERT INTO shipments (id, shipment_id, type, po_number, material_code, supplier_name, customer_name, carrier, shipment_date, notes, status, created_at, updated_at)
-      VALUES (${shipment.id}, ${shipment.shipmentId}, ${shipment.type}, ${shipment.poNumber}, ${shipment.materialCode}, ${shipment.supplierName || null}, ${shipment.customerName || null}, ${shipment.carrier}, ${shipment.shipmentDate}, ${shipment.notes || null}, ${shipment.status}, ${shipment.createdAt}, ${shipment.updatedAt})
+      INSERT INTO shipments (id, shipment_id, type, po_number, material_code, supplier_name, customer_name, carrier, shipment_date, notes, status, created_at, updated_at, tenant_id)
+      VALUES (${shipment.id}, ${shipment.shipmentId}, ${shipment.type}, ${shipment.poNumber}, ${shipment.materialCode}, ${shipment.supplierName || null}, ${shipment.customerName || null}, ${shipment.carrier}, ${shipment.shipmentDate}, ${shipment.notes || null}, ${shipment.status}, ${shipment.createdAt}, ${shipment.updatedAt}, ${tenantId})
     `;
   },
 
@@ -642,9 +800,7 @@ export const dbShipments = {
 
   async delete(id: string): Promise<boolean> {
     await initTables();
-    const { rowCount } = await sql`
-      DELETE FROM shipments WHERE id = ${id}
-    `;
+    const { rowCount } = await sql`DELETE FROM shipments WHERE id = ${id}`;
     return (rowCount ?? 0) > 0;
   },
 };
@@ -667,66 +823,42 @@ function mapShipment(row: Record<string, unknown>): Shipment {
   };
 }
 
-function mapQualityDoc(row: Record<string, unknown>): QualityDocument {
-  return {
-    id: row.id as string,
-    docId: row.doc_id as string,
-    poNumber: row.po_number as string,
-    materialCode: row.material_code as string,
-    customerName: row.customer_name as string,
-    customerPo: row.customer_po as string,
-    tareWeight: Number(row.tare_weight),
-    rowCount: row.row_count as number,
-    personName: (row.person_name as string) || undefined,
-    rows: typeof row.rows === "string" ? JSON.parse(row.rows as string) : row.rows as QualityDocument["rows"],
-    status: row.status as QualityDocument["status"],
-    createdAt: row.created_at as string,
-    updatedAt: row.updated_at as string,
-  };
-}
-
 // ─── Quality Templates ───
 
 export const dbQualityTemplates = {
-  async getAll(filters?: { active?: boolean; tenantId?: string }): Promise<QualityTemplate[]> {
+  async getAll(tenantId: string | null, filters?: { active?: boolean }): Promise<QualityTemplate[]> {
     await initTables();
-    if (filters?.active !== undefined && filters?.tenantId) {
-      const { rows } = await sql`
-        SELECT * FROM quality_templates WHERE active = ${filters.active} AND tenant_id = ${filters.tenantId} ORDER BY created_at DESC
-      `;
+    const active = filters?.active;
+
+    if (tenantId !== null) {
+      if (active !== undefined) {
+        const { rows } = await sql`SELECT * FROM quality_templates WHERE tenant_id = ${tenantId} AND active = ${active} ORDER BY created_at DESC`;
+        return rows.map(mapQualityTemplate);
+      }
+      const { rows } = await sql`SELECT * FROM quality_templates WHERE tenant_id = ${tenantId} ORDER BY created_at DESC`;
       return rows.map(mapQualityTemplate);
     }
-    if (filters?.active !== undefined) {
-      const { rows } = await sql`
-        SELECT * FROM quality_templates WHERE active = ${filters.active} ORDER BY created_at DESC
-      `;
+
+    // super_admin: no tenant filter
+    if (active !== undefined) {
+      const { rows } = await sql`SELECT * FROM quality_templates WHERE active = ${active} ORDER BY created_at DESC`;
       return rows.map(mapQualityTemplate);
     }
-    if (filters?.tenantId) {
-      const { rows } = await sql`
-        SELECT * FROM quality_templates WHERE tenant_id = ${filters.tenantId} ORDER BY created_at DESC
-      `;
-      return rows.map(mapQualityTemplate);
-    }
-    const { rows } = await sql`
-      SELECT * FROM quality_templates ORDER BY created_at DESC
-    `;
+    const { rows } = await sql`SELECT * FROM quality_templates ORDER BY created_at DESC`;
     return rows.map(mapQualityTemplate);
   },
 
   async getById(id: string): Promise<QualityTemplate | null> {
     await initTables();
-    const { rows } = await sql`
-      SELECT * FROM quality_templates WHERE id = ${id}
-    `;
+    const { rows } = await sql`SELECT * FROM quality_templates WHERE id = ${id}`;
     return rows.length > 0 ? mapQualityTemplate(rows[0]) : null;
   },
 
-  async create(template: QualityTemplate): Promise<void> {
+  async create(template: QualityTemplate, tenantId: string | null): Promise<void> {
     await initTables();
     await sql`
       INSERT INTO quality_templates (id, template_id, title, description, header_fields, row_fields, active, default_row_count, min_row_count, max_row_count, tenant_id, created_at, updated_at)
-      VALUES (${template.id}, ${template.templateId}, ${template.title}, ${template.description || null}, ${JSON.stringify(template.headerFields)}, ${JSON.stringify(template.rowFields)}, ${template.active}, ${template.defaultRowCount}, ${template.minRowCount ?? null}, ${template.maxRowCount ?? null}, ${template.tenantId ?? null}, ${template.createdAt}, ${template.updatedAt})
+      VALUES (${template.id}, ${template.templateId}, ${template.title}, ${template.description || null}, ${JSON.stringify(template.headerFields)}, ${JSON.stringify(template.rowFields)}, ${template.active}, ${template.defaultRowCount}, ${template.minRowCount ?? null}, ${template.maxRowCount ?? null}, ${tenantId}, ${template.createdAt}, ${template.updatedAt})
     `;
   },
 
@@ -734,15 +866,11 @@ export const dbQualityTemplates = {
     await initTables();
     const now = new Date().toISOString();
     if (data.active !== undefined) {
-      const { rowCount } = await sql`
-        UPDATE quality_templates SET active = ${data.active}, updated_at = ${now} WHERE id = ${id}
-      `;
+      const { rowCount } = await sql`UPDATE quality_templates SET active = ${data.active}, updated_at = ${now} WHERE id = ${id}`;
       return (rowCount ?? 0) > 0;
     }
     if (data.title) {
-      const { rowCount } = await sql`
-        UPDATE quality_templates SET title = ${data.title}, updated_at = ${now} WHERE id = ${id}
-      `;
+      const { rowCount } = await sql`UPDATE quality_templates SET title = ${data.title}, updated_at = ${now} WHERE id = ${id}`;
       return (rowCount ?? 0) > 0;
     }
     return false;
@@ -750,9 +878,7 @@ export const dbQualityTemplates = {
 
   async delete(id: string): Promise<boolean> {
     await initTables();
-    const { rowCount } = await sql`
-      DELETE FROM quality_templates WHERE id = ${id}
-    `;
+    const { rowCount } = await sql`DELETE FROM quality_templates WHERE id = ${id}`;
     return (rowCount ?? 0) > 0;
   },
 };
@@ -778,45 +904,56 @@ function mapQualityTemplate(row: Record<string, unknown>): QualityTemplate {
 // ─── Quality Documents V2 ───
 
 export const dbQualityDocsV2 = {
-  async getAll(filters?: { status?: string; templateId?: string; tenantId?: string }): Promise<QualityDocumentV2[]> {
+  async getAll(tenantId: string | null, filters?: { status?: string; templateId?: string }): Promise<QualityDocumentV2[]> {
     await initTables();
-    if (filters?.status && filters?.templateId) {
-      const { rows } = await sql`
-        SELECT * FROM quality_documents_v2 WHERE status = ${filters.status} AND template_id = ${filters.templateId} ORDER BY created_at DESC
-      `;
+    const status = filters?.status;
+    const templateId = filters?.templateId;
+
+    if (tenantId !== null) {
+      if (status !== undefined && templateId !== undefined) {
+        const { rows } = await sql`SELECT * FROM quality_documents_v2 WHERE tenant_id = ${tenantId} AND status = ${status} AND template_id = ${templateId} ORDER BY created_at DESC`;
+        return rows.map(mapQualityDocV2);
+      }
+      if (status !== undefined) {
+        const { rows } = await sql`SELECT * FROM quality_documents_v2 WHERE tenant_id = ${tenantId} AND status = ${status} ORDER BY created_at DESC`;
+        return rows.map(mapQualityDocV2);
+      }
+      if (templateId !== undefined) {
+        const { rows } = await sql`SELECT * FROM quality_documents_v2 WHERE tenant_id = ${tenantId} AND template_id = ${templateId} ORDER BY created_at DESC`;
+        return rows.map(mapQualityDocV2);
+      }
+      const { rows } = await sql`SELECT * FROM quality_documents_v2 WHERE tenant_id = ${tenantId} ORDER BY created_at DESC`;
       return rows.map(mapQualityDocV2);
     }
-    if (filters?.status) {
-      const { rows } = await sql`
-        SELECT * FROM quality_documents_v2 WHERE status = ${filters.status} ORDER BY created_at DESC
-      `;
+
+    // super_admin: no tenant filter
+    if (status !== undefined && templateId !== undefined) {
+      const { rows } = await sql`SELECT * FROM quality_documents_v2 WHERE status = ${status} AND template_id = ${templateId} ORDER BY created_at DESC`;
       return rows.map(mapQualityDocV2);
     }
-    if (filters?.templateId) {
-      const { rows } = await sql`
-        SELECT * FROM quality_documents_v2 WHERE template_id = ${filters.templateId} ORDER BY created_at DESC
-      `;
+    if (status !== undefined) {
+      const { rows } = await sql`SELECT * FROM quality_documents_v2 WHERE status = ${status} ORDER BY created_at DESC`;
       return rows.map(mapQualityDocV2);
     }
-    const { rows } = await sql`
-      SELECT * FROM quality_documents_v2 ORDER BY created_at DESC
-    `;
+    if (templateId !== undefined) {
+      const { rows } = await sql`SELECT * FROM quality_documents_v2 WHERE template_id = ${templateId} ORDER BY created_at DESC`;
+      return rows.map(mapQualityDocV2);
+    }
+    const { rows } = await sql`SELECT * FROM quality_documents_v2 ORDER BY created_at DESC`;
     return rows.map(mapQualityDocV2);
   },
 
   async getById(id: string): Promise<QualityDocumentV2 | null> {
     await initTables();
-    const { rows } = await sql`
-      SELECT * FROM quality_documents_v2 WHERE id = ${id}
-    `;
+    const { rows } = await sql`SELECT * FROM quality_documents_v2 WHERE id = ${id}`;
     return rows.length > 0 ? mapQualityDocV2(rows[0]) : null;
   },
 
-  async create(doc: QualityDocumentV2): Promise<void> {
+  async create(doc: QualityDocumentV2, tenantId: string | null): Promise<void> {
     await initTables();
     await sql`
       INSERT INTO quality_documents_v2 (id, doc_id, template_id, template_title, header_values, rows, row_count, status, worker_name, quality_tech_name, tenant_id, created_at, updated_at, worker_filled_at, completed_at)
-      VALUES (${doc.id}, ${doc.docId}, ${doc.templateId}, ${doc.templateTitle}, ${JSON.stringify(doc.headerValues)}, ${JSON.stringify(doc.rows)}, ${doc.rowCount}, ${doc.status}, ${doc.workerName || null}, ${doc.qualityTechName || null}, ${doc.tenantId ?? null}, ${doc.createdAt}, ${doc.updatedAt}, ${doc.workerFilledAt || null}, ${doc.completedAt || null})
+      VALUES (${doc.id}, ${doc.docId}, ${doc.templateId}, ${doc.templateTitle}, ${JSON.stringify(doc.headerValues)}, ${JSON.stringify(doc.rows)}, ${doc.rowCount}, ${doc.status}, ${doc.workerName || null}, ${doc.qualityTechName || null}, ${tenantId}, ${doc.createdAt}, ${doc.updatedAt}, ${doc.workerFilledAt || null}, ${doc.completedAt || null})
     `;
   },
 
@@ -851,9 +988,7 @@ export const dbQualityDocsV2 = {
 
   async delete(id: string): Promise<boolean> {
     await initTables();
-    const { rowCount } = await sql`
-      DELETE FROM quality_documents_v2 WHERE id = ${id}
-    `;
+    const { rowCount } = await sql`DELETE FROM quality_documents_v2 WHERE id = ${id}`;
     return (rowCount ?? 0) > 0;
   },
 };
@@ -881,40 +1016,35 @@ function mapQualityDocV2(row: Record<string, unknown>): QualityDocumentV2 {
 // ─── Document Folders ───
 
 export const dbDocumentFolders = {
-  async getAll(): Promise<DocumentFolder[]> {
+  async getAll(tenantId: string | null): Promise<DocumentFolder[]> {
     await initTables();
-    const { rows } = await sql`
-      SELECT * FROM document_folders ORDER BY name ASC
-    `;
+    if (tenantId !== null) {
+      const { rows } = await sql`SELECT * FROM document_folders WHERE tenant_id = ${tenantId} ORDER BY name ASC`;
+      return rows.map(mapDocumentFolder);
+    }
+    const { rows } = await sql`SELECT * FROM document_folders ORDER BY name ASC`;
     return rows.map(mapDocumentFolder);
   },
 
   async getById(id: string): Promise<DocumentFolder | null> {
     await initTables();
-    const { rows } = await sql`
-      SELECT * FROM document_folders WHERE id = ${id}
-    `;
+    const { rows } = await sql`SELECT * FROM document_folders WHERE id = ${id}`;
     return rows.length > 0 ? mapDocumentFolder(rows[0]) : null;
   },
 
-  async create(folder: DocumentFolder): Promise<void> {
+  async create(folder: DocumentFolder, tenantId: string | null): Promise<void> {
     await initTables();
     await sql`
-      INSERT INTO document_folders (id, name, description, created_at)
-      VALUES (${folder.id}, ${folder.name}, ${folder.description || null}, ${folder.createdAt})
+      INSERT INTO document_folders (id, name, description, created_at, tenant_id)
+      VALUES (${folder.id}, ${folder.name}, ${folder.description || null}, ${folder.createdAt}, ${tenantId})
     `;
   },
 
   async update(id: string, data: { name?: string; description?: string }): Promise<boolean> {
     await initTables();
     if (data.name) {
-      const { rowCount } = await sql`
-        UPDATE document_folders SET name = ${data.name} WHERE id = ${id}
-      `;
-      // Also update denormalized folder_name in documents
-      await sql`
-        UPDATE instruction_documents SET folder_name = ${data.name} WHERE folder_id = ${id}
-      `;
+      const { rowCount } = await sql`UPDATE document_folders SET name = ${data.name} WHERE id = ${id}`;
+      await sql`UPDATE instruction_documents SET folder_name = ${data.name} WHERE folder_id = ${id}`;
       return (rowCount ?? 0) > 0;
     }
     return false;
@@ -922,9 +1052,7 @@ export const dbDocumentFolders = {
 
   async delete(id: string): Promise<boolean> {
     await initTables();
-    const { rowCount } = await sql`
-      DELETE FROM document_folders WHERE id = ${id}
-    `;
+    const { rowCount } = await sql`DELETE FROM document_folders WHERE id = ${id}`;
     return (rowCount ?? 0) > 0;
   },
 };
@@ -941,21 +1069,28 @@ function mapDocumentFolder(row: Record<string, unknown>): DocumentFolder {
 // ─── Instruction Documents ───
 
 export const dbInstructionDocuments = {
-  async getAll(filters?: { folderId?: string; role?: string }): Promise<InstructionDocument[]> {
+  async getAll(tenantId: string | null, filters?: { folderId?: string; role?: string }): Promise<InstructionDocument[]> {
     await initTables();
-    if (filters?.folderId) {
-      const { rows } = await sql`
-        SELECT * FROM instruction_documents WHERE folder_id = ${filters.folderId} ORDER BY created_at DESC
-      `;
-      const docs = rows.map(mapInstructionDocument);
-      if (filters.role) {
-        return docs.filter((d) => d.allowedRoles.includes(filters.role as UserRole));
+    let rows: Record<string, unknown>[];
+
+    if (tenantId !== null) {
+      if (filters?.folderId) {
+        const result = await sql`SELECT * FROM instruction_documents WHERE tenant_id = ${tenantId} AND folder_id = ${filters.folderId} ORDER BY created_at DESC`;
+        rows = result.rows;
+      } else {
+        const result = await sql`SELECT * FROM instruction_documents WHERE tenant_id = ${tenantId} ORDER BY created_at DESC`;
+        rows = result.rows;
       }
-      return docs;
+    } else {
+      if (filters?.folderId) {
+        const result = await sql`SELECT * FROM instruction_documents WHERE folder_id = ${filters.folderId} ORDER BY created_at DESC`;
+        rows = result.rows;
+      } else {
+        const result = await sql`SELECT * FROM instruction_documents ORDER BY created_at DESC`;
+        rows = result.rows;
+      }
     }
-    const { rows } = await sql`
-      SELECT * FROM instruction_documents ORDER BY created_at DESC
-    `;
+
     const docs = rows.map(mapInstructionDocument);
     if (filters?.role) {
       return docs.filter((d) => d.allowedRoles.includes(filters.role as UserRole));
@@ -965,17 +1100,15 @@ export const dbInstructionDocuments = {
 
   async getById(id: string): Promise<InstructionDocument | null> {
     await initTables();
-    const { rows } = await sql`
-      SELECT * FROM instruction_documents WHERE id = ${id}
-    `;
+    const { rows } = await sql`SELECT * FROM instruction_documents WHERE id = ${id}`;
     return rows.length > 0 ? mapInstructionDocument(rows[0]) : null;
   },
 
-  async create(doc: InstructionDocument): Promise<void> {
+  async create(doc: InstructionDocument, tenantId: string | null): Promise<void> {
     await initTables();
     await sql`
-      INSERT INTO instruction_documents (id, folder_id, folder_name, title, description, file_name, file_url, file_size, previous_file_url, previous_file_name, allowed_roles, uploaded_by, uploaded_by_user_id, created_at, updated_at)
-      VALUES (${doc.id}, ${doc.folderId}, ${doc.folderName}, ${doc.title}, ${doc.description || null}, ${doc.fileName}, ${doc.fileUrl}, ${doc.fileSize}, ${doc.previousFileUrl || null}, ${doc.previousFileName || null}, ${JSON.stringify(doc.allowedRoles)}::jsonb, ${doc.uploadedBy}, ${doc.uploadedByUserId}, ${doc.createdAt}, ${doc.updatedAt})
+      INSERT INTO instruction_documents (id, folder_id, folder_name, title, description, file_name, file_url, file_size, previous_file_url, previous_file_name, allowed_roles, uploaded_by, uploaded_by_user_id, created_at, updated_at, tenant_id)
+      VALUES (${doc.id}, ${doc.folderId}, ${doc.folderName}, ${doc.title}, ${doc.description || null}, ${doc.fileName}, ${doc.fileUrl}, ${doc.fileSize}, ${doc.previousFileUrl || null}, ${doc.previousFileName || null}, ${JSON.stringify(doc.allowedRoles)}::jsonb, ${doc.uploadedBy}, ${doc.uploadedByUserId}, ${doc.createdAt}, ${doc.updatedAt}, ${tenantId})
     `;
   },
 
@@ -1012,17 +1145,13 @@ export const dbInstructionDocuments = {
 
   async delete(id: string): Promise<boolean> {
     await initTables();
-    const { rowCount } = await sql`
-      DELETE FROM instruction_documents WHERE id = ${id}
-    `;
+    const { rowCount } = await sql`DELETE FROM instruction_documents WHERE id = ${id}`;
     return (rowCount ?? 0) > 0;
   },
 
   async countByFolder(folderId: string): Promise<number> {
     await initTables();
-    const { rows } = await sql`
-      SELECT COUNT(*) as count FROM instruction_documents WHERE folder_id = ${folderId}
-    `;
+    const { rows } = await sql`SELECT COUNT(*) as count FROM instruction_documents WHERE folder_id = ${folderId}`;
     return Number(rows[0].count);
   },
 };

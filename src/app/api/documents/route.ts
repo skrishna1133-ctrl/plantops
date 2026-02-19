@@ -1,32 +1,25 @@
 import { NextRequest, NextResponse } from "next/server";
 import { put } from "@vercel/blob";
 import { dbInstructionDocuments, dbDocumentFolders, dbUsers } from "@/lib/db";
-import { verifySessionToken } from "@/lib/auth";
+import { requireAuth } from "@/lib/api-auth";
 import crypto from "crypto";
 import type { UserRole } from "@/lib/schemas";
 
 const MAX_FILE_SIZE = 50 * 1024 * 1024; // 50MB
 
 export async function GET(request: NextRequest) {
+  const auth = await requireAuth(request, ["worker", "quality_tech", "engineer", "shipping", "admin", "owner"]);
+  if (!auth.ok) return auth.response;
+  const tenantId = auth.payload.tenantId;
+
   try {
-    const sessionCookie = request.cookies.get("plantops_session");
-    if (!sessionCookie) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
-    const payload = await verifySessionToken(sessionCookie.value);
-    if (!payload) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
     const { searchParams } = new URL(request.url);
     const folderId = searchParams.get("folderId") || undefined;
 
-    // Admin/owner see all documents, others see only allowed ones
-    const isAdmin = ["admin", "owner"].includes(payload.role);
-    const docs = await dbInstructionDocuments.getAll({
+    const isAdmin = ["admin", "owner", "super_admin"].includes(auth.payload.role);
+    const docs = await dbInstructionDocuments.getAll(tenantId, {
       folderId,
-      role: isAdmin ? undefined : payload.role,
+      role: isAdmin ? undefined : auth.payload.role,
     });
 
     return NextResponse.json(docs);
@@ -37,21 +30,11 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
+  const auth = await requireAuth(request, ["admin", "owner", "engineer"]);
+  if (!auth.ok) return auth.response;
+  const tenantId = auth.payload.tenantId;
+
   try {
-    const sessionCookie = request.cookies.get("plantops_session");
-    if (!sessionCookie) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
-    const payload = await verifySessionToken(sessionCookie.value);
-    if (!payload) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
-    if (!["admin", "owner", "engineer"].includes(payload.role)) {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-    }
-
     const formData = await request.formData();
     const file = formData.get("file") as File | null;
     const title = formData.get("title") as string | null;
@@ -72,23 +55,19 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "At least one allowed role is required" }, { status: 400 });
     }
 
-    // Validate file type
     if (file.type !== "application/pdf") {
       return NextResponse.json({ error: "Only PDF files are allowed" }, { status: 400 });
     }
 
-    // Validate file size
     if (file.size > MAX_FILE_SIZE) {
       return NextResponse.json({ error: "File size must be under 50MB" }, { status: 400 });
     }
 
-    // Validate folder exists
     const folder = await dbDocumentFolders.getById(folderId);
     if (!folder) {
       return NextResponse.json({ error: "Folder not found" }, { status: 404 });
     }
 
-    // Parse allowed roles
     let allowedRoles: UserRole[];
     try {
       allowedRoles = JSON.parse(allowedRolesStr);
@@ -96,13 +75,11 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Invalid allowedRoles format" }, { status: 400 });
     }
 
-    // Upload to Vercel Blob
     const blob = await put(`documents/${crypto.randomUUID()}_${file.name}`, file, {
       access: "public",
     });
 
-    // Get uploader name
-    const user = await dbUsers.getById(payload.userId);
+    const user = await dbUsers.getById(auth.payload.userId);
     const uploaderName = user?.fullName || "Unknown";
 
     const now = new Date().toISOString();
@@ -119,12 +96,12 @@ export async function POST(request: NextRequest) {
       previousFileName: undefined,
       allowedRoles,
       uploadedBy: uploaderName,
-      uploadedByUserId: payload.userId,
+      uploadedByUserId: auth.payload.userId,
       createdAt: now,
       updatedAt: now,
     };
 
-    await dbInstructionDocuments.create(doc);
+    await dbInstructionDocuments.create(doc, tenantId);
     return NextResponse.json(doc, { status: 201 });
   } catch (error) {
     console.error("Error uploading document:", error);

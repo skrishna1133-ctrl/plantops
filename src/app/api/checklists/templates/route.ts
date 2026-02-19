@@ -1,34 +1,21 @@
 import { NextRequest, NextResponse } from "next/server";
 import { dbTemplates } from "@/lib/db";
-import { verifySessionToken } from "@/lib/auth";
+import { requireAuth } from "@/lib/api-auth";
 import { v4 as uuidv4 } from "uuid";
 import type { ChecklistTemplate, TemplateItem } from "@/lib/schemas";
 
 export async function GET(request: NextRequest) {
+  const auth = await requireAuth(request, ["worker", "admin", "owner"]);
+  if (!auth.ok) return auth.response;
+  const tenantId = auth.payload.tenantId;
+
   try {
-    // Verify authentication
-    const sessionCookie = request.cookies.get("plantops_session");
-    if (!sessionCookie) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
-    const payload = await verifySessionToken(sessionCookie.value);
-    if (!payload) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
-    // Check role - must be worker, admin, or owner
-    if (!["worker", "admin", "owner"].includes(payload.role)) {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-    }
-
     const { searchParams } = new URL(request.url);
     const type = searchParams.get("type") || undefined;
     const activeParam = searchParams.get("active");
     const active = activeParam === "false" ? undefined : true;
 
-    const templates = await dbTemplates.getAll({ type, active });
-
+    const templates = await dbTemplates.getAll(tenantId, { type, active });
     return NextResponse.json(templates);
   } catch (error) {
     console.error("Error fetching templates:", error);
@@ -37,23 +24,11 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
+  const auth = await requireAuth(request, ["admin", "owner"]);
+  if (!auth.ok) return auth.response;
+  const tenantId = auth.payload.tenantId;
+
   try {
-    // Verify authentication
-    const sessionCookie = request.cookies.get("plantops_session");
-    if (!sessionCookie) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
-    const payload = await verifySessionToken(sessionCookie.value);
-    if (!payload) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
-    // Check role - only admin or owner can create templates
-    if (!["admin", "owner"].includes(payload.role)) {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-    }
-
     const body = await request.json();
     const { title, type, description, items } = body;
 
@@ -80,7 +55,7 @@ export async function POST(request: NextRequest) {
       createdAt: new Date().toISOString(),
     };
 
-    await dbTemplates.create(template);
+    await dbTemplates.create(template, tenantId);
 
     return NextResponse.json(template, { status: 201 });
   } catch (error) {

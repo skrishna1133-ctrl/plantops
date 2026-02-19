@@ -1,35 +1,23 @@
 import { NextRequest, NextResponse } from "next/server";
 import { dbQualityDocsV2, dbQualityTemplates, dbUsers } from "@/lib/db";
-import { verifySessionToken } from "@/lib/auth";
+import { requireAuth } from "@/lib/api-auth";
 import { evaluateFormula } from "@/lib/formula";
-import type { QualityFieldValue, QualityDocRowV2, QualityTemplateField } from "@/lib/schemas";
+import type { QualityFieldValue, QualityDocRowV2 } from "@/lib/schemas";
 
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const auth = await requireAuth(request, ["worker", "quality_tech", "admin", "owner"]);
+  if (!auth.ok) return auth.response;
+
   try {
-    const sessionCookie = request.cookies.get("plantops_session");
-    if (!sessionCookie) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
-    const payload = await verifySessionToken(sessionCookie.value);
-    if (!payload) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
-    if (!["worker", "quality_tech", "admin", "owner"].includes(payload.role)) {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-    }
-
     const { id } = await params;
     const doc = await dbQualityDocsV2.getById(id);
     if (!doc) {
       return NextResponse.json({ error: "Document not found" }, { status: 404 });
     }
 
-    // Also return the template for field definitions
     const template = await dbQualityTemplates.getById(doc.templateId);
 
     return NextResponse.json({ doc, template });
@@ -43,21 +31,10 @@ export async function PATCH(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const auth = await requireAuth(request, ["worker", "quality_tech", "admin", "owner"]);
+  if (!auth.ok) return auth.response;
+
   try {
-    const sessionCookie = request.cookies.get("plantops_session");
-    if (!sessionCookie) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
-    const payload = await verifySessionToken(sessionCookie.value);
-    if (!payload) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
-    if (!["worker", "quality_tech", "admin", "owner"].includes(payload.role)) {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-    }
-
     const { id } = await params;
     const doc = await dbQualityDocsV2.getById(id);
     if (!doc) {
@@ -67,30 +44,26 @@ export async function PATCH(
     const body = await request.json();
     const { headerValues, rows, status } = body;
 
-    // Validate status transitions
     if (status) {
       if (doc.status === "draft" && status === "worker_filled") {
-        if (!["worker", "admin", "owner"].includes(payload.role)) {
+        if (!["worker", "admin", "owner", "super_admin"].includes(auth.payload.role)) {
           return NextResponse.json({ error: "Only workers can submit draft documents" }, { status: 403 });
         }
       } else if (doc.status === "worker_filled" && status === "complete") {
-        if (!["quality_tech", "admin", "owner"].includes(payload.role)) {
+        if (!["quality_tech", "admin", "owner", "super_admin"].includes(auth.payload.role)) {
           return NextResponse.json({ error: "Only quality techs can complete documents" }, { status: 403 });
         }
-      } else if (status !== doc.status && !["admin", "owner"].includes(payload.role)) {
+      } else if (status !== doc.status && !["admin", "owner", "super_admin"].includes(auth.payload.role)) {
         return NextResponse.json({ error: "Invalid status transition" }, { status: 400 });
       }
     }
 
-    // Get template for field definitions and formula evaluation
     const template = await dbQualityTemplates.getById(doc.templateId);
 
-    // Compute calculated fields if we have rows/headerValues and template
     let finalHeaderValues = headerValues || doc.headerValues;
     let finalRows: QualityDocRowV2[] = rows || doc.rows;
 
     if (template) {
-      // Build header lookup for formulas
       const headerLookup: Record<string, number> = {};
       for (const val of finalHeaderValues) {
         if (val.numericValue !== undefined) {
@@ -101,7 +74,6 @@ export async function PATCH(
         }
       }
 
-      // Compute calculated header fields
       for (const field of template.headerFields) {
         if (field.type === "calculated" && field.formula) {
           const val = finalHeaderValues.find((v: QualityFieldValue) => v.fieldId === field.id);
@@ -118,7 +90,6 @@ export async function PATCH(
         }
       }
 
-      // Compute calculated row fields
       finalRows = finalRows.map((row: QualityDocRowV2) => {
         const rowLookup: Record<string, number> = {};
         for (const val of row.values) {
@@ -130,7 +101,6 @@ export async function PATCH(
           }
         }
 
-        // Multi-pass to resolve dependent calculations
         for (let pass = 0; pass < 3; pass++) {
           for (const field of template.rowFields) {
             if (field.type === "calculated" && field.formula) {
@@ -153,8 +123,7 @@ export async function PATCH(
       });
     }
 
-    // Get user name for audit trail
-    const user = await dbUsers.getById(payload.userId);
+    const user = await dbUsers.getById(auth.payload.userId);
     const userName = user?.fullName || "Unknown";
 
     const updateData: Record<string, unknown> = {
@@ -190,21 +159,10 @@ export async function DELETE(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const auth = await requireAuth(request, ["admin", "owner"]);
+  if (!auth.ok) return auth.response;
+
   try {
-    const sessionCookie = request.cookies.get("plantops_session");
-    if (!sessionCookie) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
-    const payload = await verifySessionToken(sessionCookie.value);
-    if (!payload) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
-    if (!["admin", "owner"].includes(payload.role)) {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-    }
-
     const { id } = await params;
     const deleted = await dbQualityDocsV2.delete(id);
     if (!deleted) {

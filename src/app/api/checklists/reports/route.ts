@@ -1,35 +1,22 @@
 import { NextRequest, NextResponse } from "next/server";
 import { dbSubmissions } from "@/lib/db";
 import { getFlags } from "@/lib/flags";
-import { verifySessionToken } from "@/lib/auth";
+import { requireAuth } from "@/lib/api-auth";
 
 // GET /api/checklists/reports?mode=daily&date=2026-02-09
 // GET /api/checklists/reports?mode=weekly&weekOf=2026-02-03
 export async function GET(request: NextRequest) {
+  const auth = await requireAuth(request, ["admin", "owner"]);
+  if (!auth.ok) return auth.response;
+  const tenantId = auth.payload.tenantId;
+
   try {
-    // Verify authentication
-    const sessionCookie = request.cookies.get("plantops_session");
-    if (!sessionCookie) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
-    const payload = await verifySessionToken(sessionCookie.value);
-    if (!payload) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
-    // Check role - only admin or owner can view reports
-    if (!["admin", "owner"].includes(payload.role)) {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-    }
-
     const { searchParams } = new URL(request.url);
     const mode = searchParams.get("mode") || "daily";
     const dateParam = searchParams.get("date");
     const weekOfParam = searchParams.get("weekOf");
 
-    // Fetch all submissions (filtered by date range in app logic)
-    const allSubmissions = await dbSubmissions.getAll();
+    const allSubmissions = await dbSubmissions.getAll(tenantId);
 
     if (mode === "daily") {
       const targetDate = dateParam || new Date().toISOString().slice(0, 10);
@@ -115,23 +102,11 @@ export async function GET(request: NextRequest) {
 
 // POST /api/checklists/reports - cleanup non-flagged submissions older than a week
 export async function POST(request: NextRequest) {
+  const auth = await requireAuth(request, ["admin", "owner"]);
+  if (!auth.ok) return auth.response;
+  const tenantId = auth.payload.tenantId;
+
   try {
-    // Verify authentication
-    const sessionCookie = request.cookies.get("plantops_session");
-    if (!sessionCookie) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
-    const payload = await verifySessionToken(sessionCookie.value);
-    if (!payload) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
-    // Check role - only admin or owner can trigger cleanup
-    if (!["admin", "owner"].includes(payload.role)) {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-    }
-
     const body = await request.json();
     const { action } = body;
 
@@ -141,8 +116,8 @@ export async function POST(request: NextRequest) {
       oneWeekAgo.setDate(oneWeekAgo.getDate() - 7);
       const cutoff = oneWeekAgo.toISOString();
 
-      const removed = await dbSubmissions.deleteCleanBefore(cutoff);
-      const allRemaining = await dbSubmissions.getAll();
+      const removed = await dbSubmissions.deleteCleanBefore(cutoff, tenantId);
+      const allRemaining = await dbSubmissions.getAll(tenantId);
 
       return NextResponse.json({
         success: true,

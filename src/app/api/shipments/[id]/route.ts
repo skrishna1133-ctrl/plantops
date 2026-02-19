@@ -1,20 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
-import { verifySessionToken } from "@/lib/auth";
 import { dbShipments } from "@/lib/db";
-
-const shipmentRoles = ["shipping", "admin", "owner"];
-
-async function requireShipmentAccess(request: NextRequest) {
-  const session = request.cookies.get("plantops_session")?.value;
-  if (!session) return null;
-  const payload = await verifySessionToken(session);
-  if (!payload || !shipmentRoles.includes(payload.role)) return null;
-  return payload;
-}
+import { requireAuth } from "@/lib/api-auth";
 
 export async function PATCH(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const auth = await requireShipmentAccess(request);
-  if (!auth) return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
+  const auth = await requireAuth(request, ["shipping", "admin", "owner"]);
+  if (!auth.ok) return auth.response;
 
   const { id } = await params;
   const body = await request.json();
@@ -26,12 +16,8 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
 }
 
 export async function DELETE(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const session = request.cookies.get("plantops_session")?.value;
-  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
-  const payload = await verifySessionToken(session);
-  if (!payload || (payload.role !== "admin" && payload.role !== "owner")) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
-  }
+  const auth = await requireAuth(request, ["admin", "owner"]);
+  if (!auth.ok) return auth.response;
 
   const { id } = await params;
   const deleted = await dbShipments.delete(id);

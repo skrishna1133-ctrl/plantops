@@ -14,6 +14,7 @@ function LoginForm() {
   const searchParams = useSearchParams();
   const from = searchParams.get("from");
 
+  const [companyCode, setCompanyCode] = useState("");
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
@@ -28,16 +29,15 @@ function LoginForm() {
       const res = await fetch("/api/auth", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ username, password }),
+        body: JSON.stringify({ username, password, companyCode: companyCode.toUpperCase().trim() }),
       });
 
       if (!res.ok) {
-        setError("Invalid username or password");
+        setError("Invalid credentials or company code");
         return;
       }
 
       await res.json();
-      // After login, redirect to 'from' parameter or home page
       const target = from || "/";
       router.push(target);
       router.refresh();
@@ -62,6 +62,19 @@ function LoginForm() {
       <CardContent>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="space-y-2">
+            <Label htmlFor="companyCode">Company Code</Label>
+            <Input
+              id="companyCode"
+              type="text"
+              placeholder="e.g. FPI"
+              value={companyCode}
+              onChange={(e) => setCompanyCode(e.target.value.toUpperCase())}
+              required
+              autoFocus
+              autoComplete="organization"
+            />
+          </div>
+          <div className="space-y-2">
             <Label htmlFor="username">Username</Label>
             <Input
               id="username"
@@ -70,7 +83,7 @@ function LoginForm() {
               value={username}
               onChange={(e) => setUsername(e.target.value)}
               required
-              autoFocus
+              autoComplete="username"
             />
           </div>
           <div className="space-y-2">
@@ -82,6 +95,7 @@ function LoginForm() {
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               required
+              autoComplete="current-password"
             />
           </div>
 

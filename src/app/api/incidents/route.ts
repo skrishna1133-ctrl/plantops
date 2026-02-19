@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { incidentReportSchema } from "@/lib/schemas";
 import { dbIncidents } from "@/lib/db";
+import { requireAuth } from "@/lib/api-auth";
 import { v4 as uuidv4 } from "uuid";
-import { verifySessionToken } from "@/lib/auth";
 
 function generateTicketId(): string {
   const prefix = "INC";
@@ -12,6 +12,10 @@ function generateTicketId(): string {
 }
 
 export async function POST(request: NextRequest) {
+  const auth = await requireAuth(request, ["worker", "quality_tech", "engineer", "shipping", "admin", "owner"]);
+  if (!auth.ok) return auth.response;
+  const tenantId = auth.payload.tenantId;
+
   try {
     const formData = await request.formData();
 
@@ -50,7 +54,7 @@ export async function POST(request: NextRequest) {
       createdAt: new Date().toISOString(),
     };
 
-    await dbIncidents.create(incident);
+    await dbIncidents.create(incident, tenantId);
 
     return NextResponse.json(
       { ticketId: incident.ticketId, id: incident.id },
@@ -58,38 +62,20 @@ export async function POST(request: NextRequest) {
     );
   } catch (error) {
     console.error("Error creating incident:", error);
-    return NextResponse.json(
-      { error: "Internal server error" },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }
 
 export async function GET(request: NextRequest) {
+  const auth = await requireAuth(request, ["admin", "owner"]);
+  if (!auth.ok) return auth.response;
+  const tenantId = auth.payload.tenantId;
+
   try {
-    // Verify authentication
-    const sessionCookie = request.cookies.get("plantops_session");
-    if (!sessionCookie) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
-    const payload = await verifySessionToken(sessionCookie.value);
-    if (!payload) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
-    // Check role - only admin or owner can view all incidents
-    if (!["admin", "owner"].includes(payload.role)) {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-    }
-
-    const sorted = await dbIncidents.getAll();
+    const sorted = await dbIncidents.getAll(tenantId);
     return NextResponse.json(sorted);
   } catch (error) {
     console.error("Error fetching incidents:", error);
-    return NextResponse.json(
-      { error: "Internal server error" },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }

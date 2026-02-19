@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { dbTemplates, dbSubmissions, dbUsers } from "@/lib/db";
-import { verifySessionToken } from "@/lib/auth";
+import { requireAuth } from "@/lib/api-auth";
 import { v4 as uuidv4 } from "uuid";
 import type { ChecklistSubmission, ItemResponse } from "@/lib/schemas";
 
@@ -12,28 +12,16 @@ function generateSubmissionId(): string {
 }
 
 export async function GET(request: NextRequest) {
+  const auth = await requireAuth(request, ["worker", "admin", "owner"]);
+  if (!auth.ok) return auth.response;
+  const tenantId = auth.payload.tenantId;
+
   try {
-    // Verify authentication
-    const sessionCookie = request.cookies.get("plantops_session");
-    if (!sessionCookie) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
-    const payload = await verifySessionToken(sessionCookie.value);
-    if (!payload) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
-    // Check role - workers can view submissions, admins can view all
-    if (!["worker", "admin", "owner"].includes(payload.role)) {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-    }
-
     const { searchParams } = new URL(request.url);
     const type = searchParams.get("type") || undefined;
     const shift = searchParams.get("shift") || undefined;
 
-    const submissions = await dbSubmissions.getAll({ type, shift });
+    const submissions = await dbSubmissions.getAll(tenantId, { type, shift });
     return NextResponse.json(submissions);
   } catch (error) {
     console.error("Error fetching submissions:", error);
@@ -42,25 +30,12 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
+  const auth = await requireAuth(request, ["worker", "admin", "owner"]);
+  if (!auth.ok) return auth.response;
+  const tenantId = auth.payload.tenantId;
+
   try {
-    // Verify authentication
-    const sessionCookie = request.cookies.get("plantops_session");
-    if (!sessionCookie) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
-    const payload = await verifySessionToken(sessionCookie.value);
-    if (!payload) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
-    // Check role - must be worker, admin, or owner
-    if (!["worker", "admin", "owner"].includes(payload.role)) {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-    }
-
-    // Fetch user from database
-    const user = await dbUsers.getById(payload.userId);
+    const user = await dbUsers.getById(auth.payload.userId);
     if (!user) {
       return NextResponse.json({ error: "User not found" }, { status: 404 });
     }
@@ -83,7 +58,6 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Template not found" }, { status: 404 });
     }
 
-    // Enrich responses with numeric ranges from template
     const enrichedResponses = (responses as ItemResponse[]).map((r) => {
       const templateItem = template.items.find((i) => i.id === r.itemId);
       if (templateItem && templateItem.type === "numeric") {
@@ -103,14 +77,14 @@ export async function POST(request: NextRequest) {
       templateId,
       templateTitle: template.title,
       templateType: template.type,
-      personName: user.fullName, // Use authenticated user's name
+      personName: user.fullName,
       shift,
       responses: enrichedResponses,
       notes: notes || undefined,
       submittedAt: new Date().toISOString(),
     };
 
-    await dbSubmissions.create(submission);
+    await dbSubmissions.create(submission, tenantId);
 
     return NextResponse.json(
       { submissionId: submission.submissionId, id: submission.id },

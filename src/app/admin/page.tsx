@@ -16,6 +16,8 @@ import {
   FlaskConical,
   Users,
   Package,
+  Globe,
+  Building2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -48,6 +50,7 @@ import ChecklistsTab from "@/components/admin/checklists-tab";
 import QualityDocumentsTab from "@/components/admin/quality-documents-tab";
 import UsersTab from "@/components/admin/users-tab";
 import ShipmentsTab from "@/components/admin/shipments-tab";
+import SuperAdminUsersTab from "@/components/admin/super-admin-users-tab";
 import { ThemeToggle } from "@/components/theme-toggle";
 
 const criticalityColors: Record<string, string> = {
@@ -80,7 +83,13 @@ const plantLabels: Record<string, string> = {
   "plant-b": "Plant B",
 };
 
-type AdminTab = "incidents" | "checklists" | "quality" | "users" | "shipments";
+type AdminTab = "incidents" | "checklists" | "quality" | "users" | "shipments" | "all-users";
+
+interface Tenant {
+  id: string;
+  name: string;
+  code: string;
+}
 
 export default function AdminPage() {
   const [activeTab, setActiveTab] = useState<AdminTab>("incidents");
@@ -93,7 +102,33 @@ export default function AdminPage() {
     useState<IncidentReport | null>(null);
   const [photoPreview, setPhotoPreview] = useState<string | null>(null);
 
+  // Super admin state
+  const [isSuperAdmin, setIsSuperAdmin] = useState(false);
+  const [tenantName, setTenantName] = useState<string | null>(null);
+  const [tenants, setTenants] = useState<Tenant[]>([]);
+  const [viewAsTenant, setViewAsTenant] = useState<string>("all");
+
   const router = useRouter();
+
+  // Fetch session info on mount
+  useEffect(() => {
+    fetch("/api/auth")
+      .then((r) => r.json())
+      .then((data) => {
+        if (data.role === "super_admin") {
+          setIsSuperAdmin(true);
+          setTenantName(null);
+          // Fetch tenants for switcher
+          fetch("/api/tenants")
+            .then((r) => r.json())
+            .then((t) => { if (Array.isArray(t)) setTenants(t); })
+            .catch(() => {});
+        } else {
+          setTenantName(data.tenantName || null);
+        }
+      })
+      .catch(() => {});
+  }, []);
 
   const handleLogout = async () => {
     await fetch("/api/auth", { method: "DELETE" });
@@ -175,6 +210,15 @@ export default function AdminPage() {
     critical: incidents.filter((i) => i.criticality === "critical").length,
   };
 
+  const tabs = [
+    { id: "incidents" as AdminTab, label: "Incidents", icon: AlertTriangle },
+    { id: "checklists" as AdminTab, label: "Checklists", icon: ClipboardList },
+    { id: "quality" as AdminTab, label: "Quality", icon: FlaskConical },
+    { id: "users" as AdminTab, label: "Users", icon: Users },
+    { id: "shipments" as AdminTab, label: "Shipments", icon: Package },
+    ...(isSuperAdmin ? [{ id: "all-users" as AdminTab, label: "All Users", icon: Globe }] : []),
+  ];
+
   return (
     <div className="min-h-screen bg-background">
       {/* Header */}
@@ -194,11 +238,34 @@ export default function AdminPage() {
                 Admin Dashboard
               </h1>
               <p className="text-xs text-muted-foreground">
-                Plant Operations Management
+                {isSuperAdmin
+                  ? "Platform Administration"
+                  : tenantName
+                  ? `${tenantName} — Operations Management`
+                  : "Plant Operations Management"}
               </p>
             </div>
           </div>
           <div className="flex items-center gap-2">
+            {/* Tenant switcher for super admin */}
+            {isSuperAdmin && tenants.length > 0 && (
+              <div className="flex items-center gap-2">
+                <Building2 size={14} className="text-muted-foreground" />
+                <Select value={viewAsTenant} onValueChange={setViewAsTenant}>
+                  <SelectTrigger className="w-[160px] h-8 text-xs">
+                    <SelectValue placeholder="View as tenant" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Tenants</SelectItem>
+                    {tenants.map((t) => (
+                      <SelectItem key={t.id} value={t.id}>
+                        {t.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
             {activeTab === "incidents" && (
               <Button
                 variant="outline"
@@ -231,13 +298,7 @@ export default function AdminPage() {
       <div className="border-b border-border bg-card">
         <div className="max-w-7xl mx-auto px-4">
           <nav className="flex gap-1">
-            {([
-              { id: "incidents" as AdminTab, label: "Incidents", icon: AlertTriangle },
-              { id: "checklists" as AdminTab, label: "Checklists", icon: ClipboardList },
-              { id: "quality" as AdminTab, label: "Quality", icon: FlaskConical },
-              { id: "users" as AdminTab, label: "Users", icon: Users },
-              { id: "shipments" as AdminTab, label: "Shipments", icon: Package },
-            ]).map((tab) => (
+            {tabs.map((tab) => (
               <button
                 key={tab.id}
                 onClick={() => setActiveTab(tab.id)}
@@ -267,6 +328,9 @@ export default function AdminPage() {
 
         {/* Shipments Tab */}
         {activeTab === "shipments" && <ShipmentsTab />}
+
+        {/* All Users Tab (super_admin only) */}
+        {activeTab === "all-users" && isSuperAdmin && <SuperAdminUsersTab />}
 
         {/* Incidents Tab */}
         {activeTab === "incidents" && <>

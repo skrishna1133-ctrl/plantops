@@ -1,21 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
 import { dbDocumentFolders } from "@/lib/db";
-import { verifySessionToken } from "@/lib/auth";
+import { requireAuth } from "@/lib/api-auth";
 import crypto from "crypto";
 
 export async function GET(request: NextRequest) {
+  const auth = await requireAuth(request, ["worker", "quality_tech", "engineer", "shipping", "admin", "owner"]);
+  if (!auth.ok) return auth.response;
+  const tenantId = auth.payload.tenantId;
+
   try {
-    const sessionCookie = request.cookies.get("plantops_session");
-    if (!sessionCookie) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
-    const payload = await verifySessionToken(sessionCookie.value);
-    if (!payload) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
-    const folders = await dbDocumentFolders.getAll();
+    const folders = await dbDocumentFolders.getAll(tenantId);
     return NextResponse.json(folders);
   } catch (error) {
     console.error("Error fetching document folders:", error);
@@ -24,21 +18,11 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
+  const auth = await requireAuth(request, ["admin", "owner", "engineer"]);
+  if (!auth.ok) return auth.response;
+  const tenantId = auth.payload.tenantId;
+
   try {
-    const sessionCookie = request.cookies.get("plantops_session");
-    if (!sessionCookie) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
-    const payload = await verifySessionToken(sessionCookie.value);
-    if (!payload) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
-    if (!["admin", "owner", "engineer"].includes(payload.role)) {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-    }
-
     const body = await request.json();
     const { name, description } = body;
 
@@ -53,7 +37,7 @@ export async function POST(request: NextRequest) {
       createdAt: new Date().toISOString(),
     };
 
-    await dbDocumentFolders.create(folder);
+    await dbDocumentFolders.create(folder, tenantId);
     return NextResponse.json(folder, { status: 201 });
   } catch (error) {
     console.error("Error creating document folder:", error);

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { createSessionToken, verifySessionToken, verifyPassword } from "@/lib/auth";
-import { dbUsers } from "@/lib/db";
+import { dbUsers, dbTenants } from "@/lib/db";
 
 const ADMIN_ID = process.env.ADMIN_ID || "admin";
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || "admin123";
@@ -24,6 +24,8 @@ export async function GET(request: NextRequest) {
         userId: "bootstrap",
         role: payload.role,
         fullName: "Admin",
+        tenantId: null,
+        tenantName: null,
       });
     }
 
@@ -32,11 +34,19 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ authenticated: false }, { status: 401 });
     }
 
+    let tenantName: string | null = null;
+    if (payload.tenantId) {
+      const tenant = await dbTenants.getById(payload.tenantId);
+      tenantName = tenant?.name ?? null;
+    }
+
     return NextResponse.json({
       authenticated: true,
       userId: user.id,
       role: user.role,
       fullName: user.fullName,
+      tenantId: payload.tenantId,
+      tenantName,
     });
   } catch {
     return NextResponse.json({ authenticated: false }, { status: 401 });
@@ -46,14 +56,37 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { username, password } = body;
+    const { username, password, companyCode } = body;
 
-    // Try DB user first
-    const dbUser = await dbUsers.getByUsername(username);
-    if (dbUser) {
-      const valid = await verifyPassword(password, dbUser.passwordHash);
-      if (valid) {
-        const token = await createSessionToken({ userId: dbUser.id, role: dbUser.role });
+    if (!companyCode) {
+      return NextResponse.json({ error: "Company code is required" }, { status: 400 });
+    }
+
+    const code = String(companyCode).toUpperCase().trim();
+
+    // PLATFORM code → super_admin or bootstrap fallback
+    if (code === "PLATFORM") {
+      // Try DB super_admin user first (tenantId: null = look for users with no tenant)
+      const dbUser = await dbUsers.getByUsername(username, null);
+      if (dbUser && dbUser.role === "super_admin") {
+        const valid = await verifyPassword(password, dbUser.passwordHash);
+        if (valid) {
+          const token = await createSessionToken({ userId: dbUser.id, role: dbUser.role, tenantId: null });
+          const cookieStore = await cookies();
+          cookieStore.set("plantops_session", token, {
+            httpOnly: true,
+            secure: process.env.NODE_ENV === "production",
+            sameSite: "lax",
+            maxAge: 60 * 60 * 24,
+            path: "/",
+          });
+          return NextResponse.json({ success: true, role: dbUser.role });
+        }
+      }
+
+      // Bootstrap admin env var fallback
+      if (username === ADMIN_ID && password === ADMIN_PASSWORD) {
+        const token = await createSessionToken({ userId: "bootstrap", role: "admin", tenantId: null });
         const cookieStore = await cookies();
         cookieStore.set("plantops_session", token, {
           httpOnly: true,
@@ -62,25 +95,38 @@ export async function POST(request: NextRequest) {
           maxAge: 60 * 60 * 24,
           path: "/",
         });
-        return NextResponse.json({ success: true, role: dbUser.role });
+        return NextResponse.json({ success: true, role: "admin" });
       }
+
+      return NextResponse.json({ error: "Invalid credentials or company code" }, { status: 401 });
     }
 
-    // Fall back to env var bootstrap admin
-    if (username === ADMIN_ID && password === ADMIN_PASSWORD) {
-      const token = await createSessionToken({ userId: "bootstrap", role: "admin" });
-      const cookieStore = await cookies();
-      cookieStore.set("plantops_session", token, {
-        httpOnly: true,
-        secure: process.env.NODE_ENV === "production",
-        sameSite: "lax",
-        maxAge: 60 * 60 * 24,
-        path: "/",
-      });
-      return NextResponse.json({ success: true, role: "admin" });
+    // Regular tenant login: look up tenant by code
+    const tenant = await dbTenants.getByCode(code);
+    if (!tenant) {
+      return NextResponse.json({ error: "Invalid credentials or company code" }, { status: 401 });
     }
 
-    return NextResponse.json({ error: "Invalid credentials" }, { status: 401 });
+    const dbUser = await dbUsers.getByUsername(username, tenant.id);
+    if (!dbUser) {
+      return NextResponse.json({ error: "Invalid credentials or company code" }, { status: 401 });
+    }
+
+    const valid = await verifyPassword(password, dbUser.passwordHash);
+    if (!valid) {
+      return NextResponse.json({ error: "Invalid credentials or company code" }, { status: 401 });
+    }
+
+    const token = await createSessionToken({ userId: dbUser.id, role: dbUser.role, tenantId: tenant.id });
+    const cookieStore = await cookies();
+    cookieStore.set("plantops_session", token, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "lax",
+      maxAge: 60 * 60 * 24,
+      path: "/",
+    });
+    return NextResponse.json({ success: true, role: dbUser.role });
   } catch (error) {
     console.error("Auth error:", error);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });

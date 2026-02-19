@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { dbQualityTemplates } from "@/lib/db";
-import { verifySessionToken } from "@/lib/auth";
+import { requireAuth } from "@/lib/api-auth";
 import { v4 as uuidv4 } from "uuid";
 import type { QualityTemplate, QualityTemplateField } from "@/lib/schemas";
 import { validateFormula } from "@/lib/formula";
@@ -13,25 +13,15 @@ function generateTemplateId(): string {
 }
 
 export async function GET(request: NextRequest) {
+  const auth = await requireAuth(request, ["quality_tech", "admin", "owner"]);
+  if (!auth.ok) return auth.response;
+  const tenantId = auth.payload.tenantId;
+
   try {
-    const sessionCookie = request.cookies.get("plantops_session");
-    if (!sessionCookie) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
-    const payload = await verifySessionToken(sessionCookie.value);
-    if (!payload) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
-    if (!["quality_tech", "admin", "owner"].includes(payload.role)) {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-    }
-
     const { searchParams } = new URL(request.url);
     const active = searchParams.get("active");
 
-    const templates = await dbQualityTemplates.getAll({
+    const templates = await dbQualityTemplates.getAll(tenantId, {
       active: active !== null ? active === "true" : undefined,
     });
     return NextResponse.json(templates);
@@ -42,21 +32,11 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
+  const auth = await requireAuth(request, ["admin", "owner"]);
+  if (!auth.ok) return auth.response;
+  const tenantId = auth.payload.tenantId;
+
   try {
-    const sessionCookie = request.cookies.get("plantops_session");
-    if (!sessionCookie) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
-    const payload = await verifySessionToken(sessionCookie.value);
-    if (!payload) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
-    if (!["admin", "owner"].includes(payload.role)) {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-    }
-
     const body = await request.json();
     const { title, description, headerFields, rowFields, defaultRowCount, minRowCount, maxRowCount } = body;
 
@@ -68,23 +48,19 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "At least one header or row field is required" }, { status: 400 });
     }
 
-    // Validate fields
     const allFields = [...(headerFields || []), ...(rowFields || [])];
     const allFieldIds = allFields.map((f: QualityTemplateField) => f.id);
 
-    // Check unique IDs
     if (new Set(allFieldIds).size !== allFieldIds.length) {
       return NextResponse.json({ error: "Field IDs must be unique" }, { status: 400 });
     }
 
-    // Validate field labels
     for (const field of allFields) {
       if (!field.label || field.label.length < 1) {
         return NextResponse.json({ error: "All fields must have a label" }, { status: 400 });
       }
     }
 
-    // Validate calculated field formulas
     const headerFieldIds = (headerFields || []).map((f: QualityTemplateField) => f.id);
     const rowFieldIds = (rowFields || []).map((f: QualityTemplateField) => f.id);
 
@@ -121,7 +97,7 @@ export async function POST(request: NextRequest) {
       updatedAt: now,
     };
 
-    await dbQualityTemplates.create(template);
+    await dbQualityTemplates.create(template, tenantId);
 
     return NextResponse.json({ templateId: template.templateId, id: template.id }, { status: 201 });
   } catch (error) {

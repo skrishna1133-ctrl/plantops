@@ -1,19 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
-import { verifySessionToken, hashPassword } from "@/lib/auth";
+import { hashPassword } from "@/lib/auth";
 import { dbUsers } from "@/lib/db";
+import { requireAuth } from "@/lib/api-auth";
 import type { UserRole } from "@/lib/schemas";
 
-async function requireAdmin(request: NextRequest) {
-  const session = request.cookies.get("plantops_session")?.value;
-  if (!session) return null;
-  const payload = await verifySessionToken(session);
-  if (!payload || (payload.role !== "admin" && payload.role !== "owner")) return null;
-  return payload;
-}
-
 export async function PATCH(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const auth = await requireAdmin(request);
-  if (!auth) return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
+  const auth = await requireAuth(request, ["admin", "owner"]);
+  if (!auth.ok) return auth.response;
 
   const { id } = await params;
   const body = await request.json();
@@ -33,8 +26,8 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
 }
 
 export async function DELETE(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const auth = await requireAdmin(request);
-  if (!auth) return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
+  const auth = await requireAuth(request, ["admin", "owner"]);
+  if (!auth.ok) return auth.response;
 
   const { id } = await params;
   const deleted = await dbUsers.delete(id);

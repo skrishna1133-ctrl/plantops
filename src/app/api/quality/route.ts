@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { dbQualityDocs } from "@/lib/db";
-import { verifySessionToken } from "@/lib/auth";
+import { requireAuth } from "@/lib/api-auth";
 import { v4 as uuidv4 } from "uuid";
 import type { QualityDocument, QualityDocRow } from "@/lib/schemas";
 
@@ -12,27 +12,15 @@ function generateDocId(): string {
 }
 
 export async function GET(request: NextRequest) {
+  const auth = await requireAuth(request, ["worker", "quality_tech", "admin", "owner"]);
+  if (!auth.ok) return auth.response;
+  const tenantId = auth.payload.tenantId;
+
   try {
-    // Verify authentication
-    const sessionCookie = request.cookies.get("plantops_session");
-    if (!sessionCookie) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
-    const payload = await verifySessionToken(sessionCookie.value);
-    if (!payload) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
-    // Check role - must be worker, quality_tech, admin, or owner
-    if (!["worker", "quality_tech", "admin", "owner"].includes(payload.role)) {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-    }
-
     const { searchParams } = new URL(request.url);
     const status = searchParams.get("status") || undefined;
 
-    const docs = await dbQualityDocs.getAll({ status });
+    const docs = await dbQualityDocs.getAll(tenantId, { status });
     return NextResponse.json(docs);
   } catch (error) {
     console.error("Error fetching quality docs:", error);
@@ -41,23 +29,11 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
+  const auth = await requireAuth(request, ["quality_tech", "admin", "owner"]);
+  if (!auth.ok) return auth.response;
+  const tenantId = auth.payload.tenantId;
+
   try {
-    // Verify authentication
-    const sessionCookie = request.cookies.get("plantops_session");
-    if (!sessionCookie) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
-    const payload = await verifySessionToken(sessionCookie.value);
-    if (!payload) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
-    // Check role - only quality_tech (quality_tech), admin, or owner can create quality documents
-    if (!["quality_tech", "admin", "owner"].includes(payload.role)) {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-    }
-
     const body = await request.json();
     const { poNumber, materialCode, customerName, customerPo, tareWeight, rowCount } = body;
 
@@ -97,7 +73,7 @@ export async function POST(request: NextRequest) {
       updatedAt: now,
     };
 
-    await dbQualityDocs.create(doc);
+    await dbQualityDocs.create(doc, tenantId);
 
     return NextResponse.json({ docId: doc.docId, id: doc.id }, { status: 201 });
   } catch (error) {

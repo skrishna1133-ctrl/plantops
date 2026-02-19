@@ -1,17 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
-import { verifySessionToken } from "@/lib/auth";
 import { dbShipments } from "@/lib/db";
+import { requireAuth } from "@/lib/api-auth";
 import type { Shipment, ShipmentType, ShipmentStatus } from "@/lib/schemas";
-
-const shipmentRoles = ["shipping", "admin", "owner"];
-
-async function requireShipmentAccess(request: NextRequest) {
-  const session = request.cookies.get("plantops_session")?.value;
-  if (!session) return null;
-  const payload = await verifySessionToken(session);
-  if (!payload || !shipmentRoles.includes(payload.role)) return null;
-  return payload;
-}
 
 function generateShipmentId(): string {
   const date = new Date().toISOString().slice(2, 10).replace(/-/g, "");
@@ -20,20 +10,22 @@ function generateShipmentId(): string {
 }
 
 export async function GET(request: NextRequest) {
-  const auth = await requireShipmentAccess(request);
-  if (!auth) return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
+  const auth = await requireAuth(request, ["shipping", "admin", "owner"]);
+  if (!auth.ok) return auth.response;
+  const tenantId = auth.payload.tenantId;
 
   const { searchParams } = new URL(request.url);
   const type = searchParams.get("type") || undefined;
   const status = searchParams.get("status") || undefined;
 
-  const shipments = await dbShipments.getAll({ type, status });
+  const shipments = await dbShipments.getAll(tenantId, { type, status });
   return NextResponse.json(shipments);
 }
 
 export async function POST(request: NextRequest) {
-  const auth = await requireShipmentAccess(request);
-  if (!auth) return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
+  const auth = await requireAuth(request, ["shipping", "admin", "owner"]);
+  if (!auth.ok) return auth.response;
+  const tenantId = auth.payload.tenantId;
 
   try {
     const body = await request.json();
@@ -71,7 +63,7 @@ export async function POST(request: NextRequest) {
       updatedAt: now,
     };
 
-    await dbShipments.create(shipment);
+    await dbShipments.create(shipment, tenantId);
     return NextResponse.json({ shipmentId: shipment.shipmentId, id: shipment.id }, { status: 201 });
   } catch (error) {
     console.error("Error creating shipment:", error);

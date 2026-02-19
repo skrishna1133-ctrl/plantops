@@ -1,28 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
 import { dbQualityDocs, dbUsers } from "@/lib/db";
-import { verifySessionToken } from "@/lib/auth";
+import { requireAuth } from "@/lib/api-auth";
 
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const auth = await requireAuth(request, ["worker", "quality_tech", "admin", "owner"]);
+  if (!auth.ok) return auth.response;
+
   try {
-    // Verify authentication
-    const sessionCookie = request.cookies.get("plantops_session");
-    if (!sessionCookie) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
-    const payload = await verifySessionToken(sessionCookie.value);
-    if (!payload) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
-    // Check role - must be worker, quality_tech, admin, or owner
-    if (!["worker", "quality_tech", "admin", "owner"].includes(payload.role)) {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-    }
-
     const { id } = await params;
     const doc = await dbQualityDocs.getById(id);
 
@@ -41,25 +28,11 @@ export async function PATCH(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const auth = await requireAuth(request, ["worker", "quality_tech", "admin", "owner"]);
+  if (!auth.ok) return auth.response;
+
   try {
-    // Verify authentication
-    const sessionCookie = request.cookies.get("plantops_session");
-    if (!sessionCookie) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
-    const payload = await verifySessionToken(sessionCookie.value);
-    if (!payload) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
-    // Check role - must be worker, quality_tech, admin, or owner
-    if (!["worker", "quality_tech", "admin", "owner"].includes(payload.role)) {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-    }
-
-    // Fetch user from database
-    const user = await dbUsers.getById(payload.userId);
+    const user = await dbUsers.getById(auth.payload.userId);
     if (!user) {
       return NextResponse.json({ error: "User not found" }, { status: 404 });
     }
@@ -71,7 +44,7 @@ export async function PATCH(
     const updateData: Record<string, unknown> = {};
     if (rows !== undefined) updateData.rows = rows;
     if (status !== undefined) updateData.status = status;
-    updateData.personName = user.fullName; // Auto-populate from session
+    updateData.personName = user.fullName;
 
     const updated = await dbQualityDocs.update(id, updateData);
     if (!updated) {
@@ -89,23 +62,10 @@ export async function DELETE(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const auth = await requireAuth(request, ["admin", "owner"]);
+  if (!auth.ok) return auth.response;
+
   try {
-    // Verify authentication
-    const sessionCookie = request.cookies.get("plantops_session");
-    if (!sessionCookie) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
-    const payload = await verifySessionToken(sessionCookie.value);
-    if (!payload) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
-    // Check role - only admin or owner can delete
-    if (!["admin", "owner"].includes(payload.role)) {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-    }
-
     const { id } = await params;
     const deleted = await dbQualityDocs.delete(id);
 
