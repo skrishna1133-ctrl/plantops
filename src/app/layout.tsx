@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import PWARegister from "@/components/pwa-register";
 import { ThemeProvider } from "@/components/theme-provider";
+import ChatPanel from "@/components/messaging/chat-panel";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -45,6 +46,7 @@ export default function RootLayout({
         <ThemeProvider>
           <PWARegister />
           {children}
+          <ChatPanel />
         </ThemeProvider>
       </body>
     </html>

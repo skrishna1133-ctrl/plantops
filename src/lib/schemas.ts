@@ -311,6 +311,37 @@ export interface Tenant {
   createdAt: string;
 }
 
+// ─── Messaging ───
+
+export interface MessageGroup {
+  id: string;
+  tenantId: string;
+  name: string;
+  createdBy: string;
+  createdAt: string;
+  memberCount?: number;
+}
+
+export interface MessageGroupMember {
+  groupId: string;
+  userId: string;
+  fullName: string;
+  role: UserRole;
+  muted: boolean;
+  addedAt: string;
+}
+
+export interface Message {
+  id: string;
+  tenantId: string;
+  senderId: string;
+  senderName: string;
+  groupId: string | null;
+  recipientId: string | null;
+  content: string;
+  createdAt: string;
+}
+
 // ─── Instructions/Documents ───
 
 export interface DocumentFolder {

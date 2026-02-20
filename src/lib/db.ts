@@ -17,6 +17,9 @@ import type {
   DocumentFolder,
   InstructionDocument,
   Tenant,
+  MessageGroup,
+  MessageGroupMember,
+  Message,
 } from "./schemas";
 import { getFlags } from "./flags";
 
@@ -227,6 +230,39 @@ async function initTables() {
   await sql`UPDATE quality_documents_v2 SET tenant_id = ${FPI_ID} WHERE tenant_id IS NULL`;
   await sql`UPDATE document_folders SET tenant_id = ${FPI_ID} WHERE tenant_id IS NULL`;
   await sql`UPDATE instruction_documents SET tenant_id = ${FPI_ID} WHERE tenant_id IS NULL`;
+
+  await sql`
+    CREATE TABLE IF NOT EXISTS message_groups (
+      id UUID PRIMARY KEY,
+      tenant_id UUID NOT NULL,
+      name VARCHAR(100) NOT NULL,
+      created_by VARCHAR(50) NOT NULL,
+      created_at VARCHAR(50) NOT NULL
+    )
+  `;
+
+  await sql`
+    CREATE TABLE IF NOT EXISTS message_group_members (
+      group_id UUID NOT NULL REFERENCES message_groups(id) ON DELETE CASCADE,
+      user_id VARCHAR(50) NOT NULL,
+      muted BOOLEAN DEFAULT false,
+      added_at VARCHAR(50) NOT NULL,
+      PRIMARY KEY (group_id, user_id)
+    )
+  `;
+
+  await sql`
+    CREATE TABLE IF NOT EXISTS messages (
+      id UUID PRIMARY KEY,
+      tenant_id UUID NOT NULL,
+      sender_id VARCHAR(50) NOT NULL,
+      sender_name VARCHAR(100) NOT NULL,
+      group_id UUID REFERENCES message_groups(id) ON DELETE CASCADE,
+      recipient_id VARCHAR(50),
+      content TEXT NOT NULL,
+      created_at VARCHAR(50) NOT NULL
+    )
+  `;
 
   tablesInitialized = true;
 }
@@ -1237,5 +1273,212 @@ function mapInstructionDocument(row: Record<string, unknown>): InstructionDocume
     uploadedByUserId: row.uploaded_by_user_id as string,
     createdAt: row.created_at as string,
     updatedAt: row.updated_at as string,
+  };
+}
+
+// ─── Message Groups ───
+
+export const dbMessageGroups = {
+  async getForUser(tenantId: string, userId: string): Promise<MessageGroup[]> {
+    await initTables();
+    const { rows } = await sql`
+      SELECT mg.*, COUNT(mgm2.user_id) as member_count
+      FROM message_groups mg
+      JOIN message_group_members mgm ON mg.id = mgm.group_id AND mgm.user_id = ${userId}
+      LEFT JOIN message_group_members mgm2 ON mg.id = mgm2.group_id
+      WHERE mg.tenant_id = ${tenantId}
+      GROUP BY mg.id
+      ORDER BY mg.created_at ASC
+    `;
+    return rows.map(mapMessageGroup);
+  },
+
+  async getAll(tenantId: string): Promise<MessageGroup[]> {
+    await initTables();
+    const { rows } = await sql`
+      SELECT mg.*, COUNT(mgm.user_id) as member_count
+      FROM message_groups mg
+      LEFT JOIN message_group_members mgm ON mg.id = mgm.group_id
+      WHERE mg.tenant_id = ${tenantId}
+      GROUP BY mg.id
+      ORDER BY mg.created_at ASC
+    `;
+    return rows.map(mapMessageGroup);
+  },
+
+  async getById(id: string, tenantId: string): Promise<MessageGroup | null> {
+    await initTables();
+    const { rows } = await sql`
+      SELECT mg.*, COUNT(mgm.user_id) as member_count
+      FROM message_groups mg
+      LEFT JOIN message_group_members mgm ON mg.id = mgm.group_id
+      WHERE mg.id = ${id} AND mg.tenant_id = ${tenantId}
+      GROUP BY mg.id
+    `;
+    return rows.length > 0 ? mapMessageGroup(rows[0]) : null;
+  },
+
+  async create(group: MessageGroup): Promise<void> {
+    await initTables();
+    await sql`
+      INSERT INTO message_groups (id, tenant_id, name, created_by, created_at)
+      VALUES (${group.id}, ${group.tenantId}, ${group.name}, ${group.createdBy}, ${group.createdAt})
+    `;
+  },
+
+  async update(id: string, tenantId: string, data: { name?: string }): Promise<boolean> {
+    await initTables();
+    if (data.name !== undefined) {
+      const { rowCount } = await sql`UPDATE message_groups SET name = ${data.name} WHERE id = ${id} AND tenant_id = ${tenantId}`;
+      return (rowCount ?? 0) > 0;
+    }
+    return false;
+  },
+
+  async delete(id: string, tenantId: string): Promise<boolean> {
+    await initTables();
+    const { rowCount } = await sql`DELETE FROM message_groups WHERE id = ${id} AND tenant_id = ${tenantId}`;
+    return (rowCount ?? 0) > 0;
+  },
+
+  async getMembers(groupId: string): Promise<MessageGroupMember[]> {
+    await initTables();
+    const { rows } = await sql`
+      SELECT mgm.group_id, mgm.user_id, u.full_name, u.role, mgm.muted, mgm.added_at
+      FROM message_group_members mgm
+      JOIN users u ON mgm.user_id = u.id
+      WHERE mgm.group_id = ${groupId}
+      ORDER BY u.full_name ASC
+    `;
+    return rows.map(mapMessageGroupMember);
+  },
+
+  async getMembership(groupId: string, userId: string): Promise<{ muted: boolean } | null> {
+    await initTables();
+    const { rows } = await sql`SELECT muted FROM message_group_members WHERE group_id = ${groupId} AND user_id = ${userId}`;
+    if (rows.length === 0) return null;
+    return { muted: rows[0].muted as boolean };
+  },
+
+  async addMember(groupId: string, userId: string, addedAt: string): Promise<void> {
+    await initTables();
+    await sql`
+      INSERT INTO message_group_members (group_id, user_id, muted, added_at)
+      VALUES (${groupId}, ${userId}, false, ${addedAt})
+      ON CONFLICT (group_id, user_id) DO NOTHING
+    `;
+  },
+
+  async removeMember(groupId: string, userId: string): Promise<boolean> {
+    await initTables();
+    const { rowCount } = await sql`DELETE FROM message_group_members WHERE group_id = ${groupId} AND user_id = ${userId}`;
+    return (rowCount ?? 0) > 0;
+  },
+
+  async setMuted(groupId: string, userId: string, muted: boolean): Promise<boolean> {
+    await initTables();
+    const { rowCount } = await sql`UPDATE message_group_members SET muted = ${muted} WHERE group_id = ${groupId} AND user_id = ${userId}`;
+    return (rowCount ?? 0) > 0;
+  },
+};
+
+function mapMessageGroup(row: Record<string, unknown>): MessageGroup {
+  return {
+    id: row.id as string,
+    tenantId: row.tenant_id as string,
+    name: row.name as string,
+    createdBy: row.created_by as string,
+    createdAt: row.created_at as string,
+    memberCount: row.member_count !== undefined ? Number(row.member_count) : undefined,
+  };
+}
+
+function mapMessageGroupMember(row: Record<string, unknown>): MessageGroupMember {
+  return {
+    groupId: row.group_id as string,
+    userId: row.user_id as string,
+    fullName: row.full_name as string,
+    role: row.role as UserRole,
+    muted: row.muted as boolean,
+    addedAt: row.added_at as string,
+  };
+}
+
+// ─── Messages ───
+
+export const dbMessages = {
+  async getForGroup(groupId: string, after?: string): Promise<Message[]> {
+    await initTables();
+    if (after) {
+      const { rows } = await sql`
+        SELECT * FROM messages WHERE group_id = ${groupId} AND created_at > ${after}
+        ORDER BY created_at ASC LIMIT 200
+      `;
+      return rows.map(mapMessage);
+    }
+    const { rows } = await sql`
+      SELECT * FROM messages WHERE group_id = ${groupId}
+      ORDER BY created_at ASC LIMIT 200
+    `;
+    return rows.map(mapMessage);
+  },
+
+  async getDM(tenantId: string, userId1: string, userId2: string, after?: string): Promise<Message[]> {
+    await initTables();
+    if (after) {
+      const { rows } = await sql`
+        SELECT * FROM messages
+        WHERE tenant_id = ${tenantId} AND group_id IS NULL
+          AND ((sender_id = ${userId1} AND recipient_id = ${userId2}) OR (sender_id = ${userId2} AND recipient_id = ${userId1}))
+          AND created_at > ${after}
+        ORDER BY created_at ASC LIMIT 200
+      `;
+      return rows.map(mapMessage);
+    }
+    const { rows } = await sql`
+      SELECT * FROM messages
+      WHERE tenant_id = ${tenantId} AND group_id IS NULL
+        AND ((sender_id = ${userId1} AND recipient_id = ${userId2}) OR (sender_id = ${userId2} AND recipient_id = ${userId1}))
+      ORDER BY created_at ASC LIMIT 200
+    `;
+    return rows.map(mapMessage);
+  },
+
+  async getLatestForGroup(groupId: string): Promise<Message | null> {
+    await initTables();
+    const { rows } = await sql`SELECT * FROM messages WHERE group_id = ${groupId} ORDER BY created_at DESC LIMIT 1`;
+    return rows.length > 0 ? mapMessage(rows[0]) : null;
+  },
+
+  async getLatestDM(tenantId: string, userId1: string, userId2: string): Promise<Message | null> {
+    await initTables();
+    const { rows } = await sql`
+      SELECT * FROM messages
+      WHERE tenant_id = ${tenantId} AND group_id IS NULL
+        AND ((sender_id = ${userId1} AND recipient_id = ${userId2}) OR (sender_id = ${userId2} AND recipient_id = ${userId1}))
+      ORDER BY created_at DESC LIMIT 1
+    `;
+    return rows.length > 0 ? mapMessage(rows[0]) : null;
+  },
+
+  async create(msg: Message): Promise<void> {
+    await initTables();
+    await sql`
+      INSERT INTO messages (id, tenant_id, sender_id, sender_name, group_id, recipient_id, content, created_at)
+      VALUES (${msg.id}, ${msg.tenantId}, ${msg.senderId}, ${msg.senderName}, ${msg.groupId}, ${msg.recipientId}, ${msg.content}, ${msg.createdAt})
+    `;
+  },
+};
+
+function mapMessage(row: Record<string, unknown>): Message {
+  return {
+    id: row.id as string,
+    tenantId: row.tenant_id as string,
+    senderId: row.sender_id as string,
+    senderName: row.sender_name as string,
+    groupId: (row.group_id as string) || null,
+    recipientId: (row.recipient_id as string) || null,
+    content: row.content as string,
+    createdAt: row.created_at as string,
   };
 }
