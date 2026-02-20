@@ -14,14 +14,19 @@ function generateSubmissionId(): string {
 export async function GET(request: NextRequest) {
   const auth = await requireAuth(request, ["worker", "admin", "owner"]);
   if (!auth.ok) return auth.response;
-  const tenantId = auth.payload.tenantId;
 
   try {
     const { searchParams } = new URL(request.url);
     const type = searchParams.get("type") || undefined;
     const shift = searchParams.get("shift") || undefined;
 
-    const submissions = await dbSubmissions.getAll(tenantId, { type, shift });
+    let effectiveTenantId = auth.payload.tenantId;
+    if (auth.payload.role === "super_admin") {
+      const viewAs = searchParams.get("viewAs");
+      if (viewAs) effectiveTenantId = viewAs;
+    }
+
+    const submissions = await dbSubmissions.getAll(effectiveTenantId, { type, shift });
     return NextResponse.json(submissions);
   } catch (error) {
     console.error("Error fetching submissions:", error);

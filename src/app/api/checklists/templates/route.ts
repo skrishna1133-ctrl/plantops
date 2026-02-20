@@ -7,7 +7,6 @@ import type { ChecklistTemplate, TemplateItem } from "@/lib/schemas";
 export async function GET(request: NextRequest) {
   const auth = await requireAuth(request, ["worker", "admin", "owner"]);
   if (!auth.ok) return auth.response;
-  const tenantId = auth.payload.tenantId;
 
   try {
     const { searchParams } = new URL(request.url);
@@ -15,7 +14,13 @@ export async function GET(request: NextRequest) {
     const activeParam = searchParams.get("active");
     const active = activeParam === "false" ? undefined : true;
 
-    const templates = await dbTemplates.getAll(tenantId, { type, active });
+    let effectiveTenantId = auth.payload.tenantId;
+    if (auth.payload.role === "super_admin") {
+      const viewAs = searchParams.get("viewAs");
+      if (viewAs) effectiveTenantId = viewAs;
+    }
+
+    const templates = await dbTemplates.getAll(effectiveTenantId, { type, active });
     return NextResponse.json(templates);
   } catch (error) {
     console.error("Error fetching templates:", error);

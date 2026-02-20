@@ -8,7 +8,7 @@ import ChecklistReportsTab from "./checklist-reports-tab";
 
 type SubTab = "templates" | "submissions" | "reports";
 
-export default function ChecklistsTab({ readOnly = false }: { readOnly?: boolean }) {
+export default function ChecklistsTab({ readOnly = false, viewAs }: { readOnly?: boolean; viewAs?: string }) {
   const [subTab, setSubTab] = useState<SubTab>(readOnly ? "submissions" : "templates");
 
   const tabs: { id: SubTab; label: string }[] = [
@@ -32,8 +32,8 @@ export default function ChecklistsTab({ readOnly = false }: { readOnly?: boolean
         ))}
       </div>
 
-      {subTab === "templates" && !readOnly && <ChecklistTemplatesTab />}
-      {subTab === "submissions" && <ChecklistSubmissionsTab readOnly={readOnly} />}
+      {subTab === "templates" && !readOnly && <ChecklistTemplatesTab viewAs={viewAs} />}
+      {subTab === "submissions" && <ChecklistSubmissionsTab readOnly={readOnly} viewAs={viewAs} />}
       {subTab === "reports" && <ChecklistReportsTab />}
     </div>
   );

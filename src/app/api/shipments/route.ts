@@ -12,13 +12,18 @@ function generateShipmentId(): string {
 export async function GET(request: NextRequest) {
   const auth = await requireAuth(request, ["shipping", "admin", "owner"]);
   if (!auth.ok) return auth.response;
-  const tenantId = auth.payload.tenantId;
 
   const { searchParams } = new URL(request.url);
   const type = searchParams.get("type") || undefined;
   const status = searchParams.get("status") || undefined;
 
-  const shipments = await dbShipments.getAll(tenantId, { type, status });
+  let effectiveTenantId = auth.payload.tenantId;
+  if (auth.payload.role === "super_admin") {
+    const viewAs = searchParams.get("viewAs");
+    if (viewAs) effectiveTenantId = viewAs;
+  }
+
+  const shipments = await dbShipments.getAll(effectiveTenantId, { type, status });
   return NextResponse.json(shipments);
 }
 

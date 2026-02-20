@@ -27,7 +27,7 @@ import {
 } from "@/lib/schemas";
 import TemplateBuilderDialog from "./template-builder-dialog";
 
-export default function ChecklistTemplatesTab() {
+export default function ChecklistTemplatesTab({ viewAs }: { viewAs?: string }) {
   const [templates, setTemplates] = useState<ChecklistTemplate[]>([]);
   const [loading, setLoading] = useState(true);
   const [filterType, setFilterType] = useState<string>("all");
@@ -40,6 +40,7 @@ export default function ChecklistTemplatesTab() {
       const params = new URLSearchParams();
       if (filterType !== "all") params.set("type", filterType);
       params.set("active", "false");
+      if (viewAs) params.set("viewAs", viewAs);
       const res = await fetch(`/api/checklists/templates?${params}`);
       const data = await res.json();
       setTemplates(data);

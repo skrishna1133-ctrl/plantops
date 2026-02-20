@@ -14,13 +14,18 @@ function generateDocId(): string {
 export async function GET(request: NextRequest) {
   const auth = await requireAuth(request, ["worker", "quality_tech", "admin", "owner"]);
   if (!auth.ok) return auth.response;
-  const tenantId = auth.payload.tenantId;
 
   try {
     const { searchParams } = new URL(request.url);
     const status = searchParams.get("status") || undefined;
 
-    const docs = await dbQualityDocs.getAll(tenantId, { status });
+    let effectiveTenantId = auth.payload.tenantId;
+    if (auth.payload.role === "super_admin") {
+      const viewAs = searchParams.get("viewAs");
+      if (viewAs) effectiveTenantId = viewAs;
+    }
+
+    const docs = await dbQualityDocs.getAll(effectiveTenantId, { status });
     return NextResponse.json(docs);
   } catch (error) {
     console.error("Error fetching quality docs:", error);

@@ -55,7 +55,7 @@ type UnifiedDoc = {
 
 type QualitySubTab = "documents" | "templates";
 
-export default function QualityDocumentsTab({ readOnly = false }: { readOnly?: boolean }) {
+export default function QualityDocumentsTab({ readOnly = false, viewAs }: { readOnly?: boolean; viewAs?: string }) {
   const [subTab, setSubTab] = useState<QualitySubTab>("documents");
   const [legacyDocs, setLegacyDocs] = useState<QualityDocument[]>([]);
   const [v2Docs, setV2Docs] = useState<QualityDocumentV2[]>([]);
@@ -71,6 +71,7 @@ export default function QualityDocumentsTab({ readOnly = false }: { readOnly?: b
     try {
       const params = new URLSearchParams();
       if (filterStatus !== "all") params.set("status", filterStatus);
+      if (viewAs) params.set("viewAs", viewAs);
 
       const [legacyRes, v2Res] = await Promise.all([
         fetch(`/api/quality?${params}`),

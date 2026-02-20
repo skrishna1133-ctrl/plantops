@@ -37,7 +37,7 @@ const typeColors: Record<string, string> = {
   outgoing: "bg-purple-500/20 text-purple-400 border-purple-500/30",
 };
 
-export default function ShipmentsTab({ readOnly = false }: { readOnly?: boolean }) {
+export default function ShipmentsTab({ readOnly = false, viewAs }: { readOnly?: boolean; viewAs?: string }) {
   const [shipments, setShipments] = useState<Shipment[]>([]);
   const [loading, setLoading] = useState(true);
   const [filterType, setFilterType] = useState<string>("all");
@@ -51,6 +51,7 @@ export default function ShipmentsTab({ readOnly = false }: { readOnly?: boolean 
       const params = new URLSearchParams();
       if (filterType !== "all") params.set("type", filterType);
       if (filterStatus !== "all") params.set("status", filterStatus);
+      if (viewAs) params.set("viewAs", viewAs);
       const res = await fetch(`/api/shipments?${params}`);
       const data = await res.json();
       setShipments(data);

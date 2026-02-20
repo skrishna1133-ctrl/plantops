@@ -16,7 +16,14 @@ export async function GET(request: NextRequest) {
     return NextResponse.json(users);
   }
 
-  const users = await dbUsers.getAll(tenantId);
+  // super_admin with ?viewAs=<tenantId> returns that tenant's users
+  let effectiveTenantId = tenantId;
+  if (auth.payload.role === "super_admin") {
+    const viewAs = searchParams.get("viewAs");
+    if (viewAs) effectiveTenantId = viewAs;
+  }
+
+  const users = await dbUsers.getAll(effectiveTenantId);
   return NextResponse.json(users);
 }
 

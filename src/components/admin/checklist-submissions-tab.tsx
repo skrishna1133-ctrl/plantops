@@ -27,7 +27,7 @@ import {
 import { getFlags } from "@/lib/flags";
 import SubmissionDetailDialog from "./submission-detail-dialog";
 
-export default function ChecklistSubmissionsTab({ readOnly = false }: { readOnly?: boolean }) {
+export default function ChecklistSubmissionsTab({ readOnly = false, viewAs }: { readOnly?: boolean; viewAs?: string }) {
   const [submissions, setSubmissions] = useState<ChecklistSubmission[]>([]);
   const [loading, setLoading] = useState(true);
   const [filterType, setFilterType] = useState<string>("all");
@@ -43,6 +43,7 @@ export default function ChecklistSubmissionsTab({ readOnly = false }: { readOnly
       const params = new URLSearchParams();
       if (filterType !== "all") params.set("type", filterType);
       if (filterShift !== "all") params.set("shift", filterShift);
+      if (viewAs) params.set("viewAs", viewAs);
       const res = await fetch(`/api/checklists/submissions?${params}`);
       const data = await res.json();
       setSubmissions(data);

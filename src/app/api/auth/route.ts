@@ -22,8 +22,8 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({
         authenticated: true,
         userId: "bootstrap",
-        role: payload.role,
-        fullName: "Admin",
+        role: "super_admin",
+        fullName: "Platform Admin",
         tenantId: null,
         tenantName: null,
       });
@@ -86,7 +86,7 @@ export async function POST(request: NextRequest) {
 
       // Bootstrap admin env var fallback
       if (username === ADMIN_ID && password === ADMIN_PASSWORD) {
-        const token = await createSessionToken({ userId: "bootstrap", role: "admin", tenantId: null });
+        const token = await createSessionToken({ userId: "bootstrap", role: "super_admin", tenantId: null });
         const cookieStore = await cookies();
         cookieStore.set("plantops_session", token, {
           httpOnly: true,
@@ -95,7 +95,7 @@ export async function POST(request: NextRequest) {
           maxAge: 60 * 60 * 24,
           path: "/",
         });
-        return NextResponse.json({ success: true, role: "admin" });
+        return NextResponse.json({ success: true, role: "super_admin" });
       }
 
       return NextResponse.json({ error: "Invalid credentials or company code" }, { status: 401 });

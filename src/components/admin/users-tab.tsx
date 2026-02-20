@@ -25,7 +25,7 @@ const roleColors: Record<string, string> = {
   shipping: "bg-indigo-500/20 text-indigo-400 border-indigo-500/30",
 };
 
-export default function UsersTab() {
+export default function UsersTab({ viewAs }: { viewAs?: string }) {
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -35,7 +35,8 @@ export default function UsersTab() {
 
   const fetchUsers = useCallback(async () => {
     try {
-      const res = await fetch("/api/users");
+      const url = viewAs ? `/api/users?viewAs=${viewAs}` : "/api/users";
+      const res = await fetch(url);
       const data = await res.json();
       setUsers(data);
     } catch (error) {

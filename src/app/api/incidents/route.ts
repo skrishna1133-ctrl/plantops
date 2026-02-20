@@ -69,10 +69,16 @@ export async function POST(request: NextRequest) {
 export async function GET(request: NextRequest) {
   const auth = await requireAuth(request, ["admin", "owner"]);
   if (!auth.ok) return auth.response;
-  const tenantId = auth.payload.tenantId;
+
+  const { searchParams } = new URL(request.url);
+  let effectiveTenantId = auth.payload.tenantId;
+  if (auth.payload.role === "super_admin") {
+    const viewAs = searchParams.get("viewAs");
+    if (viewAs) effectiveTenantId = viewAs;
+  }
 
   try {
-    const sorted = await dbIncidents.getAll(tenantId);
+    const sorted = await dbIncidents.getAll(effectiveTenantId);
     return NextResponse.json(sorted);
   } catch (error) {
     console.error("Error fetching incidents:", error);

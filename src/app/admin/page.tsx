@@ -108,6 +108,13 @@ export default function AdminPage() {
   const [tenants, setTenants] = useState<Tenant[]>([]);
   const [viewAsTenant, setViewAsTenant] = useState<string>("all");
 
+  const handleTenantChange = (tenantId: string) => {
+    setViewAsTenant(tenantId);
+    setActiveTab(tenantId !== "all" ? "incidents" : "all-users");
+  };
+
+  const tenantSelected = isSuperAdmin && viewAsTenant !== "all";
+
   const router = useRouter();
 
   // Fetch session info on mount
@@ -118,6 +125,7 @@ export default function AdminPage() {
         if (data.role === "super_admin") {
           setIsSuperAdmin(true);
           setTenantName(null);
+          setActiveTab("all-users");
           // Fetch tenants for switcher
           fetch("/api/tenants")
             .then((r) => r.json())
@@ -139,7 +147,8 @@ export default function AdminPage() {
   const fetchIncidents = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await fetch("/api/incidents");
+      const url = tenantSelected ? `/api/incidents?viewAs=${viewAsTenant}` : "/api/incidents";
+      const res = await fetch(url);
       const data = await res.json();
       setIncidents(data);
     } catch (error) {
@@ -147,7 +156,7 @@ export default function AdminPage() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [tenantSelected, viewAsTenant]);
 
   useEffect(() => {
     fetchIncidents();
@@ -210,14 +219,24 @@ export default function AdminPage() {
     critical: incidents.filter((i) => i.criticality === "critical").length,
   };
 
-  const tabs = [
-    { id: "incidents" as AdminTab, label: "Incidents", icon: AlertTriangle },
-    { id: "checklists" as AdminTab, label: "Checklists", icon: ClipboardList },
-    { id: "quality" as AdminTab, label: "Quality", icon: FlaskConical },
-    { id: "users" as AdminTab, label: "Users", icon: Users },
-    { id: "shipments" as AdminTab, label: "Shipments", icon: Package },
-    ...(isSuperAdmin ? [{ id: "all-users" as AdminTab, label: "All Users", icon: Globe }] : []),
-  ];
+  const tabs = isSuperAdmin
+    ? [
+        ...(tenantSelected ? [
+          { id: "incidents" as AdminTab, label: "Incidents", icon: AlertTriangle },
+          { id: "checklists" as AdminTab, label: "Checklists", icon: ClipboardList },
+          { id: "quality" as AdminTab, label: "Quality", icon: FlaskConical },
+          { id: "users" as AdminTab, label: "Users", icon: Users },
+          { id: "shipments" as AdminTab, label: "Shipments", icon: Package },
+        ] : []),
+        { id: "all-users" as AdminTab, label: "All Users", icon: Globe },
+      ]
+    : [
+        { id: "incidents" as AdminTab, label: "Incidents", icon: AlertTriangle },
+        { id: "checklists" as AdminTab, label: "Checklists", icon: ClipboardList },
+        { id: "quality" as AdminTab, label: "Quality", icon: FlaskConical },
+        { id: "users" as AdminTab, label: "Users", icon: Users },
+        { id: "shipments" as AdminTab, label: "Shipments", icon: Package },
+      ];
 
   return (
     <div className="min-h-screen bg-background">
@@ -251,7 +270,7 @@ export default function AdminPage() {
             {isSuperAdmin && tenants.length > 0 && (
               <div className="flex items-center gap-2">
                 <Building2 size={14} className="text-muted-foreground" />
-                <Select value={viewAsTenant} onValueChange={setViewAsTenant}>
+                <Select value={viewAsTenant} onValueChange={handleTenantChange}>
                   <SelectTrigger className="w-[160px] h-8 text-xs">
                     <SelectValue placeholder="View as tenant" />
                   </SelectTrigger>
@@ -318,16 +337,16 @@ export default function AdminPage() {
 
       <main className="max-w-7xl mx-auto px-4 py-6 space-y-6">
         {/* Checklists Tab */}
-        {activeTab === "checklists" && <ChecklistsTab />}
+        {activeTab === "checklists" && <ChecklistsTab viewAs={tenantSelected ? viewAsTenant : undefined} />}
 
         {/* Quality Tab */}
-        {activeTab === "quality" && <QualityDocumentsTab />}
+        {activeTab === "quality" && <QualityDocumentsTab viewAs={tenantSelected ? viewAsTenant : undefined} />}
 
         {/* Users Tab */}
-        {activeTab === "users" && <UsersTab />}
+        {activeTab === "users" && <UsersTab viewAs={tenantSelected ? viewAsTenant : undefined} />}
 
         {/* Shipments Tab */}
-        {activeTab === "shipments" && <ShipmentsTab />}
+        {activeTab === "shipments" && <ShipmentsTab viewAs={tenantSelected ? viewAsTenant : undefined} />}
 
         {/* All Users Tab (super_admin only) */}
         {activeTab === "all-users" && isSuperAdmin && <SuperAdminUsersTab />}
