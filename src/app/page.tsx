@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { AlertTriangle, Wrench, ClipboardCheck, Package, Clock, FileText, Shield, FileCheck, LogIn, FlaskConical, Eye, Loader2 } from "lucide-react";
+import { AlertTriangle, Wrench, ClipboardCheck, Package, Clock, FileText, Shield, FileCheck, LogIn, FlaskConical, Eye, Loader2, Globe } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import IncidentReportDialog from "@/components/incident-report-dialog";
@@ -94,6 +94,7 @@ const tools = [
 ];
 
 const roleDashboards: Record<string, { href: string; label: string; icon: typeof Shield }> = {
+  super_admin: { href: "/platform", label: "Platform", icon: Globe },
   admin: { href: "/admin", label: "Admin", icon: Shield },
   owner: { href: "/admin", label: "Admin", icon: Shield },
   quality_tech: { href: "/lab", label: "Quality Tech", icon: FlaskConical },
@@ -119,6 +120,10 @@ export default function Home() {
         if (data?.authenticated) {
           setAuthenticated(true);
           setUserRole(data.role);
+          // Super admin has no place on the tools page — send them to platform
+          if (data.role === "super_admin") {
+            router.replace("/platform");
+          }
         } else {
           setAuthenticated(false);
         }

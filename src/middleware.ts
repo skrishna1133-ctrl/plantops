@@ -3,6 +3,7 @@ import { verifySessionToken } from "@/lib/auth";
 import type { UserRole } from "@/lib/schemas";
 
 const routeRoles: Record<string, UserRole[]> = {
+  "/platform": ["super_admin"],
   "/admin": ["admin", "owner", "super_admin"],
   "/lab": ["quality_tech", "admin", "owner", "super_admin"],
   "/view": ["engineer", "admin", "owner", "super_admin"],
@@ -45,7 +46,7 @@ export async function middleware(request: NextRequest) {
       shipping: "/shipments",
       admin: "/admin",
       owner: "/admin",
-      super_admin: "/admin",
+      super_admin: "/platform",
     };
     const target = redirectMap[payload.role] || "/";
     return NextResponse.redirect(new URL(target, request.url));
@@ -55,5 +56,5 @@ export async function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/admin/:path*", "/lab/:path*", "/view/:path*", "/shipments/:path*", "/checklists/:path*", "/quality/:path*", "/documents/:path*"],
+  matcher: ["/platform/:path*", "/admin/:path*", "/lab/:path*", "/view/:path*", "/shipments/:path*", "/checklists/:path*", "/quality/:path*", "/documents/:path*"],
 };
