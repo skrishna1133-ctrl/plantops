@@ -12,7 +12,7 @@ function generateDocId(): string {
 }
 
 export async function GET(request: NextRequest) {
-  const auth = await requireAuth(request, ["worker", "quality_tech", "admin", "owner"]);
+  const auth = await requireAuth(request, ["worker", "quality_tech", "engineer", "admin", "owner"]);
   if (!auth.ok) return auth.response;
 
   try {

@@ -12,7 +12,7 @@ function generateSubmissionId(): string {
 }
 
 export async function GET(request: NextRequest) {
-  const auth = await requireAuth(request, ["worker", "admin", "owner"]);
+  const auth = await requireAuth(request, ["worker", "engineer", "admin", "owner"]);
   if (!auth.ok) return auth.response;
 
   try {

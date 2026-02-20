@@ -5,7 +5,7 @@ import { v4 as uuidv4 } from "uuid";
 import type { ChecklistTemplate, TemplateItem } from "@/lib/schemas";
 
 export async function GET(request: NextRequest) {
-  const auth = await requireAuth(request, ["worker", "admin", "owner"]);
+  const auth = await requireAuth(request, ["worker", "engineer", "admin", "owner"]);
   if (!auth.ok) return auth.response;
 
   try {

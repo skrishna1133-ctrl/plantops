@@ -10,7 +10,7 @@ function generateShipmentId(): string {
 }
 
 export async function GET(request: NextRequest) {
-  const auth = await requireAuth(request, ["shipping", "admin", "owner"]);
+  const auth = await requireAuth(request, ["shipping", "engineer", "admin", "owner"]);
   if (!auth.ok) return auth.response;
 
   const { searchParams } = new URL(request.url);

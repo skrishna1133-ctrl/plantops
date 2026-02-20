@@ -67,7 +67,7 @@ export async function POST(request: NextRequest) {
 }
 
 export async function GET(request: NextRequest) {
-  const auth = await requireAuth(request, ["admin", "owner"]);
+  const auth = await requireAuth(request, ["engineer", "admin", "owner"]);
   if (!auth.ok) return auth.response;
 
   const { searchParams } = new URL(request.url);
