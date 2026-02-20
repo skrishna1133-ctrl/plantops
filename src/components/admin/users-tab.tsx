@@ -44,7 +44,7 @@ export default function UsersTab({ viewAs }: { viewAs?: string }) {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [viewAs]);
 
   useEffect(() => {
     fetchUsers();
@@ -188,6 +188,7 @@ export default function UsersTab({ viewAs }: { viewAs?: string }) {
         onOpenChange={setDialogOpen}
         onSaved={fetchUsers}
         user={editingUser}
+        tenantId={viewAs}
       />
     </div>
   );

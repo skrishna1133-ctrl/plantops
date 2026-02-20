@@ -27,9 +27,10 @@ interface UserDialogProps {
   onOpenChange: (open: boolean) => void;
   onSaved: () => void;
   user?: User | null;
+  tenantId?: string;
 }
 
-export default function UserDialog({ open, onOpenChange, onSaved, user }: UserDialogProps) {
+export default function UserDialog({ open, onOpenChange, onSaved, user, tenantId }: UserDialogProps) {
   const isEdit = !!user;
 
   const [username, setUsername] = useState("");
@@ -77,7 +78,7 @@ export default function UserDialog({ open, onOpenChange, onSaved, user }: UserDi
         const res = await fetch("/api/users", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ username, password, fullName, role }),
+          body: JSON.stringify({ username, password, fullName, role, ...(tenantId ? { tenantId } : {}) }),
         });
         if (!res.ok) {
           const data = await res.json();
