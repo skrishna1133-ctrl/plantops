@@ -1,4 +1,5 @@
 import { sql } from "@vercel/postgres";
+import { initCmmsTables } from "./db-cmms";
 import type {
   IncidentReport,
   ChecklistTemplate,
@@ -264,7 +265,13 @@ async function initTables() {
     )
   `;
 
+  await initCmmsTables();
+
   tablesInitialized = true;
+}
+
+export async function initDb(): Promise<void> {
+  await initTables();
 }
 
 // ─── Tenants ───

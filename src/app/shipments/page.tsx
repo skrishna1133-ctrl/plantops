@@ -1,8 +1,9 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Package, LogOut } from "lucide-react";
+import { Package, LogOut, ArrowLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import ShipmentsTab from "@/components/admin/shipments-tab";
 import { ThemeToggle } from "@/components/theme-toggle";
@@ -29,6 +30,11 @@ export default function ShipmentsPage() {
       <header className="border-b border-border bg-card sticky top-0 z-10">
         <div className="max-w-7xl mx-auto px-4 py-4 flex items-center justify-between">
           <div className="flex items-center gap-3">
+            <Link href="/">
+              <Button variant="ghost" size="icon">
+                <ArrowLeft size={20} />
+              </Button>
+            </Link>
             <div className="w-10 h-10 rounded-lg bg-indigo-500 flex items-center justify-center">
               <Package className="text-white" size={22} />
             </div>

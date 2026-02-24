@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { AlertTriangle, Wrench, ClipboardCheck, Package, Clock, FileText, Shield, FileCheck, LogIn, FlaskConical, Eye, Loader2, Globe } from "lucide-react";
+import { AlertTriangle, Wrench, ClipboardCheck, Package, Clock, FileText, Shield, FileCheck, LogIn, LogOut, FlaskConical, Eye, Loader2, Globe } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import IncidentReportDialog from "@/components/incident-report-dialog";
@@ -23,13 +23,13 @@ const tools = [
   },
   {
     id: "maintenance",
-    name: "Maintenance Request",
-    description: "Submit equipment maintenance and repair requests",
+    name: "Maintenance",
+    description: "Machine registry, work orders, PM schedules, checklists, and reports",
     icon: Wrench,
     color: "text-blue-500",
     bgColor: "bg-blue-500/10 hover:bg-blue-500/20",
-    available: false,
-    requiredRoles: [] as UserRole[],
+    available: true,
+    requiredRoles: ["maintenance_manager", "maintenance_tech", "engineer", "admin", "owner", "worker"] as UserRole[],
   },
   {
     id: "checklists",
@@ -101,6 +101,8 @@ const roleDashboards: Record<string, { href: string; label: string; icon: typeof
   engineer: { href: "/view", label: "View", icon: Eye },
   shipping: { href: "/shipments", label: "Shipments", icon: Package },
   worker: { href: "/quality", label: "Quality", icon: FileCheck },
+  maintenance_manager: { href: "/maintenance", label: "Maintenance", icon: Wrench },
+  maintenance_tech: { href: "/maintenance", label: "Maintenance", icon: Wrench },
 };
 
 export default function Home() {
@@ -144,6 +146,12 @@ export default function Home() {
     return tool.requiredRoles.includes(userRole as UserRole);
   };
 
+  const handleLogout = async () => {
+    await fetch("/api/auth", { method: "DELETE" });
+    router.push("/");
+    router.refresh();
+  };
+
   const handleToolClick = (toolId: string) => {
     const tool = tools.find(t => t.id === toolId);
     if (!tool) return;
@@ -164,6 +172,8 @@ export default function Home() {
       router.push("/shipments");
     } else if (toolId === "documents") {
       router.push("/documents");
+    } else if (toolId === "maintenance") {
+      router.push("/maintenance");
     }
   };
 
@@ -237,6 +247,10 @@ export default function Home() {
                 </Link>
               );
             })() : null}
+            <Button variant="ghost" size="sm" onClick={handleLogout} className="text-muted-foreground hover:text-red-400">
+              <LogOut size={14} className="mr-2" />
+              Logout
+            </Button>
           </div>
         </div>
       </header>

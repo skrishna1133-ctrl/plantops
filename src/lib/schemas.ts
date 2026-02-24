@@ -241,6 +241,8 @@ export const userRoles = [
   "admin",
   "owner",
   "super_admin",
+  "maintenance_manager",
+  "maintenance_tech",
 ] as const;
 
 export type UserRole = (typeof userRoles)[number];
@@ -253,6 +255,8 @@ export const userRoleLabels: Record<UserRole, string> = {
   admin: "Admin",
   owner: "Owner",
   super_admin: "Super Admin",
+  maintenance_manager: "Maintenance Manager",
+  maintenance_tech: "Maintenance Tech",
 };
 
 export interface User {

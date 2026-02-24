@@ -176,6 +176,10 @@ export default function ChatPanel() {
     fetchMessages(true);
   }, [view.type, (view as { group?: { id: string } }).group?.id, (view as { user?: { id: string } }).user?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // keep a ref to the latest checkUnread so the polling interval is never stale
+  // eslint-disable-next-line @typescript-eslint/no-empty-function
+  const checkUnreadRef = useRef<() => void>(() => {});
+
   // ── Polling ─────────────────────────────────────────────────
   useEffect(() => {
     if (!auth) return;
@@ -186,14 +190,14 @@ export default function ChatPanel() {
       if (open && (view.type === "groupChat" || view.type === "dm")) {
         fetchMessages(false);
       } else if (!open) {
-        checkUnread();
+        checkUnreadRef.current();
       }
     }, interval);
 
     return () => {
       if (pollTimerRef.current) clearInterval(pollTimerRef.current);
     };
-  }, [auth, open, view, fetchMessages]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [auth, open, view, fetchMessages]);
 
   // ── Auto-scroll ─────────────────────────────────────────────
   useEffect(() => {
@@ -241,6 +245,9 @@ export default function ChatPanel() {
 
     setUnreadCount(count);
   }, [auth, groups, users]);
+
+  // Keep ref in sync with latest checkUnread
+  useEffect(() => { checkUnreadRef.current = checkUnread; }, [checkUnread]);
 
   // ── Load group members for manage view ───────────────────────
   useEffect(() => {
@@ -479,7 +486,19 @@ export default function ChatPanel() {
                   </div>
                 )}
                 {groups.length === 0 ? (
-                  <p className="text-xs text-muted-foreground text-center py-8">No groups yet</p>
+                  <div className="text-center py-8 px-4 space-y-3">
+                    <p className="text-xs text-muted-foreground">
+                      {isAdmin ? "No groups yet. Create one above." : "You haven't been added to any groups yet."}
+                    </p>
+                    {!isAdmin && (
+                      <button
+                        onClick={() => { setTab("direct"); setView({ type: "dm-list" }); }}
+                        className="text-xs text-primary hover:underline"
+                      >
+                        Try Direct Messages →
+                      </button>
+                    )}
+                  </div>
                 ) : (
                   groups.map((g) => (
                     <button
@@ -506,7 +525,7 @@ export default function ChatPanel() {
             {view.type === "dm-list" && (
               <div className="flex-1 overflow-y-auto">
                 {users.length === 0 ? (
-                  <p className="text-xs text-muted-foreground text-center py-8">No teammates found</p>
+                  <p className="text-xs text-muted-foreground text-center py-8">No other users in your company yet</p>
                 ) : (
                   users.map((u) => (
                     <button
