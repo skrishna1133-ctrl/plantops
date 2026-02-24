@@ -194,10 +194,10 @@ export default function MachinesPage() {
             </div>
             <div>
               <Label>Production Line <span className="text-muted-foreground text-xs">(optional)</span></Label>
-              <Select value={form.defaultLineId} onValueChange={v => setForm(f => ({ ...f, defaultLineId: v }))}>
+              <Select value={form.defaultLineId || "__none__"} onValueChange={v => setForm(f => ({ ...f, defaultLineId: v === "__none__" ? "" : v }))}>
                 <SelectTrigger className="mt-1.5"><SelectValue placeholder="Select line..." /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">None</SelectItem>
+                  <SelectItem value="__none__">None</SelectItem>
                   {lines.filter(l => l.isActive).map(l => <SelectItem key={l.id} value={l.id}>{l.lineId} — {l.name}</SelectItem>)}
                 </SelectContent>
               </Select>

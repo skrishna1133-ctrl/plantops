@@ -164,10 +164,10 @@ export default function WorkOrderDetailPage() {
             <CardHeader className="pb-3"><CardTitle className="text-base">Assignment</CardTitle></CardHeader>
             <CardContent>
               <div className="flex items-center gap-3">
-                <Select value={assignToId} onValueChange={setAssignToId}>
+                <Select value={assignToId || "__none__"} onValueChange={v => setAssignToId(v === "__none__" ? "" : v)}>
                   <SelectTrigger className="flex-1"><SelectValue placeholder="Assign to technician..." /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="">Unassigned</SelectItem>
+                    <SelectItem value="__none__">Unassigned</SelectItem>
                     {users.map(u => <SelectItem key={u.id} value={u.id}>{u.fullName}</SelectItem>)}
                   </SelectContent>
                 </Select>

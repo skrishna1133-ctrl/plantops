@@ -170,10 +170,10 @@ export default function WorkOrdersPage() {
             </div>
             <div>
               <Label>Assign To <span className="text-muted-foreground text-xs">(optional)</span></Label>
-              <Select value={form.assignedToId} onValueChange={v => setForm(f => ({ ...f, assignedToId: v }))}>
+              <Select value={form.assignedToId || "__none__"} onValueChange={v => setForm(f => ({ ...f, assignedToId: v === "__none__" ? "" : v }))}>
                 <SelectTrigger className="mt-1.5"><SelectValue placeholder="Unassigned" /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">Unassigned</SelectItem>
+                  <SelectItem value="__none__">Unassigned</SelectItem>
                   {users.map(u => <SelectItem key={u.id} value={u.id}>{u.fullName}</SelectItem>)}
                 </SelectContent>
               </Select>

@@ -267,20 +267,20 @@ export default function SchedulesPage() {
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <Label>Checklist Template</Label>
-                <Select value={form.checklistTemplateId} onValueChange={v => setForm(f => ({ ...f, checklistTemplateId: v }))}>
+                <Select value={form.checklistTemplateId || "__none__"} onValueChange={v => setForm(f => ({ ...f, checklistTemplateId: v === "__none__" ? "" : v }))}>
                   <SelectTrigger className="mt-1.5"><SelectValue placeholder="None" /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="">None</SelectItem>
+                    <SelectItem value="__none__">None</SelectItem>
                     {filteredChecklists.map(ct => <SelectItem key={ct.id} value={ct.id}>{ct.title}</SelectItem>)}
                   </SelectContent>
                 </Select>
               </div>
               <div>
                 <Label>Log Sheet Template</Label>
-                <Select value={form.logSheetTemplateId} onValueChange={v => setForm(f => ({ ...f, logSheetTemplateId: v }))}>
+                <Select value={form.logSheetTemplateId || "__none__"} onValueChange={v => setForm(f => ({ ...f, logSheetTemplateId: v === "__none__" ? "" : v }))}>
                   <SelectTrigger className="mt-1.5"><SelectValue placeholder="None" /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="">None</SelectItem>
+                    <SelectItem value="__none__">None</SelectItem>
                     {filteredLogTemplates.map(lt => <SelectItem key={lt.id} value={lt.id}>{lt.title}</SelectItem>)}
                   </SelectContent>
                 </Select>
@@ -288,10 +288,10 @@ export default function SchedulesPage() {
             </div>
             <div>
               <Label>Assigned Technician</Label>
-              <Select value={form.assignedTechId} onValueChange={v => setForm(f => ({ ...f, assignedTechId: v }))}>
+              <Select value={form.assignedTechId || "__none__"} onValueChange={v => setForm(f => ({ ...f, assignedTechId: v === "__none__" ? "" : v }))}>
                 <SelectTrigger className="mt-1.5"><SelectValue placeholder="None" /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">None</SelectItem>
+                  <SelectItem value="__none__">None</SelectItem>
                   {techs.map(t => <SelectItem key={t.id} value={t.id}>{t.fullName}</SelectItem>)}
                 </SelectContent>
               </Select>

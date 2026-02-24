@@ -207,10 +207,10 @@ export default function MachineDetailPage() {
           <div className="space-y-4">
             <div>
               <Label>New Line</Label>
-              <Select value={reassignForm.toLineId} onValueChange={v => setReassignForm(f => ({ ...f, toLineId: v }))}>
+              <Select value={reassignForm.toLineId || "__none__"} onValueChange={v => setReassignForm(f => ({ ...f, toLineId: v === "__none__" ? "" : v }))}>
                 <SelectTrigger className="mt-1.5"><SelectValue placeholder="Select line..." /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">Remove from line</SelectItem>
+                  <SelectItem value="__none__">Remove from line</SelectItem>
                   {lines.map(l => <SelectItem key={l.id} value={l.id}>{l.lineId} — {l.name}</SelectItem>)}
                 </SelectContent>
               </Select>
