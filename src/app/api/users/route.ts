@@ -50,7 +50,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Cannot create super_admin user" }, { status: 403 });
     }
 
-    const validRoles: UserRole[] = ["worker", "quality_tech", "engineer", "shipping", "admin", "owner"];
+    const validRoles: UserRole[] = ["worker", "quality_tech", "quality_manager", "engineer", "shipping", "admin", "owner"];
     if (auth.payload.role !== "super_admin" && !validRoles.includes(role)) {
       return NextResponse.json({ error: "Invalid role" }, { status: 400 });
     }
