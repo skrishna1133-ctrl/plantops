@@ -3,246 +3,351 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, Loader2, FileCheck, ChevronRight, LogOut } from "lucide-react";
+import {
+  Loader2, LogOut, Package, ClipboardList, AlertTriangle, MessageSquareWarning,
+  FileCheck2, Settings, ChevronRight, ArrowRight, Bell, Plus
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Card, CardContent } from "@/components/ui/card";
-import { Separator } from "@/components/ui/separator";
-import type { QualityDocument, QualityDocumentV2 } from "@/lib/schemas";
 import { ThemeToggle } from "@/components/theme-toggle";
 
-const statusLabels: Record<string, string> = {
-  draft: "To Fill",
-  worker_filled: "Submitted",
-  complete: "Complete",
-};
-
-const statusColors: Record<string, string> = {
-  draft: "bg-blue-500/20 text-blue-400 border-blue-500/30",
-  worker_filled: "bg-amber-500/20 text-amber-400 border-amber-500/30",
-  complete: "bg-green-500/20 text-green-400 border-green-500/30",
-};
+interface DashboardData {
+  pendingQc: number;
+  pendingReview: number;
+  openNcrsCritical: number;
+  openNcrsMajor: number;
+  openNcrsMinor: number;
+  openComplaints: number;
+  lotsNeedCoa: number;
+}
 
 export default function QualityPage() {
   const router = useRouter();
-  const [docs, setDocs] = useState<QualityDocument[]>([]);
-  const [v2Docs, setV2Docs] = useState<QualityDocumentV2[]>([]);
-  const [userName, setUserName] = useState("");
+  const [role, setRole] = useState<string>("");
+  const [userName, setUserName] = useState<string>("");
   const [loading, setLoading] = useState(true);
+  const [dashboard, setDashboard] = useState<DashboardData | null>(null);
+  const [pendingInspections, setPendingInspections] = useState<Array<{ id: string; lot_number: string; created_at: string }>>([]);
+  const [assignedNcrs, setAssignedNcrs] = useState<Array<{ id: string; ncr_number: string; severity: string; due_date?: string; title: string }>>([]);
+  const [myNcrs, setMyNcrs] = useState<Array<{ id: string; ncr_number: string; status: string; title: string; created_at: string }>>([]);
 
   useEffect(() => {
     fetch("/api/auth")
-      .then((res) => res.json())
-      .then((data) => {
-        if (!data.authenticated) {
-          router.push("/login?from=/quality");
-          return;
-        }
+      .then(r => r.json())
+      .then(async data => {
+        if (!data.authenticated) { router.push("/login?from=/quality"); return; }
+        setRole(data.role);
         setUserName(data.fullName || "");
-        return Promise.all([
-          fetch("/api/quality").then((r) => r.json()),
-          fetch("/api/quality/v2").then((r) => r.json()),
-        ]);
-      })
-      .then((results) => {
-        if (results) {
-          setDocs(results[0]);
-          setV2Docs(Array.isArray(results[1]) ? results[1] : []);
+
+        if (data.role === "quality_manager" || data.role === "admin" || data.role === "owner") {
+          // Load manager dashboard
+          const [lots, pending, ncrs, complaints] = await Promise.all([
+            fetch("/api/qms/lots").then(r => r.json()),
+            fetch("/api/qms/inspections/pending-review").then(r => r.json()),
+            fetch("/api/qms/ncrs").then(r => r.json()),
+            fetch("/api/qms/complaints").then(r => r.json()),
+          ]);
+          const pendingQc = Array.isArray(lots) ? lots.filter((l: { status: string }) => l.status === "pending_qc" || l.status === "qc_in_progress").length : 0;
+          const openNcrs = Array.isArray(ncrs) ? ncrs.filter((n: { status: string }) => !["closed", "cancelled"].includes(n.status)) : [];
+          const openComplaints = Array.isArray(complaints) ? complaints.filter((c: { status: string }) => !["resolved", "closed"].includes(c.status)).length : 0;
+          const lotsNeedCoa = Array.isArray(lots) ? lots.filter((l: { status: string }) => l.status === "approved").length : 0;
+          setDashboard({
+            pendingQc,
+            pendingReview: Array.isArray(pending) ? pending.length : 0,
+            openNcrsCritical: openNcrs.filter((n: { severity: string }) => n.severity === "critical").length,
+            openNcrsMajor: openNcrs.filter((n: { severity: string }) => n.severity === "major").length,
+            openNcrsMinor: openNcrs.filter((n: { severity: string }) => n.severity === "minor").length,
+            openComplaints,
+            lotsNeedCoa,
+          });
+        } else if (data.role === "quality_tech") {
+          const [inspections, ncrs] = await Promise.all([
+            fetch("/api/qms/inspections?status=draft").then(r => r.json()),
+            fetch("/api/qms/ncrs").then(r => r.json()),
+          ]);
+          setPendingInspections(Array.isArray(inspections) ? inspections.slice(0, 5) : []);
+          setAssignedNcrs(Array.isArray(ncrs) ? ncrs.filter((n: { status: string }) => !["closed", "cancelled"].includes(n.status)).slice(0, 5) : []);
+        } else if (data.role === "worker") {
+          const ncrs = await fetch("/api/qms/ncrs").then(r => r.json()).catch(() => []);
+          setMyNcrs(Array.isArray(ncrs) ? ncrs : []);
         }
-      })
-      .catch((error) => {
-        console.error(error);
-        router.push("/login?from=/quality");
       })
       .finally(() => setLoading(false));
-  }, [router]);
+  }, []);
 
   const handleLogout = async () => {
     await fetch("/api/auth", { method: "DELETE" });
     router.push("/");
-    router.refresh();
   };
 
-  const draftDocs = docs.filter((d) => d.status === "draft");
-  const otherDocs = docs.filter((d) => d.status !== "draft");
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <Loader2 className="animate-spin text-muted-foreground" size={32} />
+      </div>
+    );
+  }
 
-  const v2DraftDocs = v2Docs.filter((d) => d.status === "draft");
-  const v2OtherDocs = v2Docs.filter((d) => d.status !== "draft");
-
-  const hasNoContent =
-    draftDocs.length === 0 &&
-    otherDocs.length === 0 &&
-    v2DraftDocs.length === 0 &&
-    v2OtherDocs.length === 0;
+  const isManager = role === "quality_manager" || role === "admin" || role === "owner";
+  const isTech = role === "quality_tech";
+  const isWorker = role === "worker";
 
   return (
     <div className="min-h-screen bg-background">
+      {/* Header */}
       <header className="border-b border-border bg-card sticky top-0 z-10">
-        <div className="max-w-2xl mx-auto px-4 py-4 flex items-center justify-between">
+        <div className="max-w-6xl mx-auto px-4 py-4 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <Link href="/">
-              <Button variant="ghost" size="icon">
-                <ArrowLeft size={20} />
-              </Button>
-            </Link>
-            <div className="w-10 h-10 rounded-lg bg-purple-500 flex items-center justify-center">
-              <FileCheck className="text-white" size={22} />
+            <div className="w-9 h-9 rounded-lg bg-purple-600 flex items-center justify-center">
+              <FileCheck2 size={18} className="text-white" />
             </div>
             <div>
-              <h1 className="text-xl font-bold tracking-tight">Quality Inspection</h1>
-              <p className="text-xs text-muted-foreground">
-                {userName ? `Hi, ${userName} — ` : ""}Fill quality documents
-              </p>
+              <h1 className="font-bold text-lg">Quality Management</h1>
+              <p className="text-xs text-muted-foreground">{userName}</p>
             </div>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1">
             <ThemeToggle />
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={handleLogout}
-              className="text-muted-foreground hover:text-red-400"
-            >
-              <LogOut size={14} className="mr-2" />
-              Logout
+            <Link href="/">
+              <Button variant="ghost" size="sm" className="text-muted-foreground">Home</Button>
+            </Link>
+            <Button variant="ghost" size="sm" onClick={handleLogout} className="text-muted-foreground hover:text-red-400">
+              <LogOut size={14} className="mr-1" /> Logout
             </Button>
           </div>
         </div>
       </header>
 
-      <main className="max-w-2xl mx-auto px-4 py-6 space-y-6">
-        {loading ? (
-          <div className="flex justify-center py-16">
-            <Loader2 className="animate-spin text-muted-foreground" size={32} />
-          </div>
-        ) : hasNoContent ? (
-          <div className="text-center py-16 text-muted-foreground">
-            <FileCheck size={48} className="mx-auto mb-4 opacity-30" />
-            <p className="text-lg font-medium">No quality documents</p>
-            <p className="text-sm">Ask your admin to create one.</p>
-          </div>
-        ) : (
-          <>
-            {/* V2 Draft Docs - Pending Fill */}
-            {v2DraftDocs.length > 0 && (
-              <div className="space-y-2">
-                <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider px-1">
-                  Pending — Fill These
-                </h2>
-                <div className="space-y-2">
-                  {v2DraftDocs.map((d) => (
-                    <Link key={d.id} href={`/quality/v2/${d.id}`}>
-                      <Card className="hover:bg-muted/50 transition-colors cursor-pointer border-2 border-blue-500/30">
-                        <CardContent className="p-4 flex items-center justify-between">
-                          <div className="space-y-1">
-                            <p className="font-medium">{d.templateTitle}</p>
-                            <p className="text-sm text-muted-foreground">{d.docId}</p>
-                            <div className="flex items-center gap-2">
-                              <Badge className={statusColors[d.status]}>
-                                {statusLabels[d.status]}
-                              </Badge>
-                              <Badge variant="outline" className="text-[10px]">
-                                {d.rowCount} rows
-                              </Badge>
-                            </div>
-                          </div>
-                          <ChevronRight size={20} className="text-muted-foreground" />
-                        </CardContent>
-                      </Card>
-                    </Link>
-                  ))}
-                </div>
-              </div>
+      <main className="max-w-6xl mx-auto px-4 py-8">
+
+        {/* ─── QUALITY MANAGER VIEW ─── */}
+        {isManager && dashboard && (
+          <div className="space-y-6">
+            <div>
+              <h2 className="text-2xl font-semibold mb-1">QMS Dashboard</h2>
+              <p className="text-muted-foreground text-sm">Quality Management System overview</p>
+            </div>
+
+            {/* Summary Cards */}
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              <Link href="/quality/lots?status=pending_qc">
+                <Card className="hover:border-purple-500/50 transition-colors cursor-pointer">
+                  <CardContent className="p-4">
+                    <div className="flex items-center gap-2 mb-1">
+                      <Package size={16} className="text-purple-500" />
+                      <span className="text-xs text-muted-foreground">Lots Pending QC</span>
+                    </div>
+                    <p className="text-3xl font-bold">{dashboard.pendingQc}</p>
+                  </CardContent>
+                </Card>
+              </Link>
+
+              <Link href="/quality/inspections/pending-review">
+                <Card className="hover:border-blue-500/50 transition-colors cursor-pointer">
+                  <CardContent className="p-4">
+                    <div className="flex items-center gap-2 mb-1">
+                      <ClipboardList size={16} className="text-blue-500" />
+                      <span className="text-xs text-muted-foreground">Pending Review</span>
+                    </div>
+                    <p className="text-3xl font-bold">{dashboard.pendingReview}</p>
+                  </CardContent>
+                </Card>
+              </Link>
+
+              <Link href="/quality/ncr">
+                <Card className={`hover:border-red-500/50 transition-colors cursor-pointer ${dashboard.openNcrsCritical > 0 ? "border-red-500/30" : ""}`}>
+                  <CardContent className="p-4">
+                    <div className="flex items-center gap-2 mb-1">
+                      <AlertTriangle size={16} className="text-red-500" />
+                      <span className="text-xs text-muted-foreground">Open NCRs</span>
+                    </div>
+                    <p className="text-3xl font-bold">{dashboard.openNcrsCritical + dashboard.openNcrsMajor + dashboard.openNcrsMinor}</p>
+                    <div className="flex gap-1 mt-1">
+                      {dashboard.openNcrsCritical > 0 && <Badge variant="destructive" className="text-xs px-1">{dashboard.openNcrsCritical} critical</Badge>}
+                      {dashboard.openNcrsMajor > 0 && <Badge className="text-xs px-1 bg-orange-500">{dashboard.openNcrsMajor} major</Badge>}
+                    </div>
+                  </CardContent>
+                </Card>
+              </Link>
+
+              <Link href="/quality/complaints">
+                <Card className="hover:border-amber-500/50 transition-colors cursor-pointer">
+                  <CardContent className="p-4">
+                    <div className="flex items-center gap-2 mb-1">
+                      <MessageSquareWarning size={16} className="text-amber-500" />
+                      <span className="text-xs text-muted-foreground">Open Complaints</span>
+                    </div>
+                    <p className="text-3xl font-bold">{dashboard.openComplaints}</p>
+                  </CardContent>
+                </Card>
+              </Link>
+            </div>
+
+            {/* COA Alert */}
+            {dashboard.lotsNeedCoa > 0 && (
+              <Card className="border-green-500/30 bg-green-500/5">
+                <CardContent className="p-4 flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <FileCheck2 size={16} className="text-green-500" />
+                    <span className="text-sm"><strong>{dashboard.lotsNeedCoa}</strong> approved lot{dashboard.lotsNeedCoa !== 1 ? "s" : ""} ready for COA generation</span>
+                  </div>
+                  <Link href="/quality/coa">
+                    <Button size="sm" variant="outline" className="border-green-500/50 text-green-600">
+                      Generate COAs <ArrowRight size={14} className="ml-1" />
+                    </Button>
+                  </Link>
+                </CardContent>
+              </Card>
             )}
 
-            {/* Legacy Draft Docs */}
-            {draftDocs.length > 0 && (
-              <div className="space-y-2">
-                {v2DraftDocs.length === 0 && (
-                  <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider px-1">
-                    Pending — Fill These
-                  </h2>
-                )}
-                <div className="space-y-2">
-                  {draftDocs.map((d) => (
-                    <Link key={d.id} href={`/quality/${d.id}`}>
-                      <Card className="hover:bg-muted/50 transition-colors cursor-pointer border-2 border-blue-500/30">
-                        <CardContent className="p-4 flex items-center justify-between">
-                          <div className="space-y-1">
-                            <p className="font-medium">Bulk Density & Metal Contamination Report</p>
-                            <p className="text-sm text-muted-foreground">
-                              PO: {d.poNumber} — {d.materialCode} — {d.customerName}
-                            </p>
-                            <div className="flex items-center gap-2">
-                              <Badge className={statusColors[d.status]}>
-                                {statusLabels[d.status]}
-                              </Badge>
-                              <Badge variant="outline" className="text-[10px]">
-                                {d.rowCount} gaylords
-                              </Badge>
-                            </div>
-                          </div>
-                          <ChevronRight size={20} className="text-muted-foreground" />
-                        </CardContent>
-                      </Card>
-                    </Link>
-                  ))}
-                </div>
+            {/* Quick Navigation */}
+            <div>
+              <h3 className="text-sm font-medium text-muted-foreground mb-3">QUICK NAVIGATION</h3>
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                {[
+                  { href: "/quality/lots", label: "Lot Registry", icon: Package, color: "text-purple-500" },
+                  { href: "/quality/ncr", label: "NCR Board", icon: AlertTriangle, color: "text-red-500" },
+                  { href: "/quality/complaints", label: "Complaints", icon: MessageSquareWarning, color: "text-amber-500" },
+                  { href: "/quality/coa", label: "COAs", icon: FileCheck2, color: "text-green-500" },
+                  { href: "/quality/reports", label: "Reports", icon: ClipboardList, color: "text-blue-500" },
+                  { href: "/quality/config", label: "Configuration", icon: Settings, color: "text-gray-500" },
+                ].map(({ href, label, icon: Icon, color }) => (
+                  <Link key={href} href={href}>
+                    <Card className="hover:border-border/80 cursor-pointer transition-colors">
+                      <CardContent className="p-4 flex items-center gap-3">
+                        <Icon size={18} className={color} />
+                        <span className="font-medium text-sm">{label}</span>
+                        <ChevronRight size={14} className="ml-auto text-muted-foreground" />
+                      </CardContent>
+                    </Card>
+                  </Link>
+                ))}
               </div>
-            )}
+            </div>
+          </div>
+        )}
 
-            {/* Previously Submitted */}
-            {(v2OtherDocs.length > 0 || otherDocs.length > 0) && (
-              <div className="space-y-2">
-                <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider px-1">
-                  Previously Submitted
-                </h2>
-                <div className="space-y-2">
-                  {v2OtherDocs.map((d) => (
-                    <Link key={d.id} href={`/quality/v2/${d.id}`}>
-                      <Card className="opacity-60 hover:opacity-80 transition-opacity cursor-pointer">
-                        <CardContent className="p-4 flex items-center justify-between">
-                          <div className="space-y-1">
-                            <p className="font-medium">{d.templateTitle}</p>
-                            <p className="text-sm text-muted-foreground">{d.docId}</p>
-                            <div className="flex items-center gap-2">
-                              <Badge className={statusColors[d.status]}>
-                                {statusLabels[d.status]}
-                              </Badge>
-                              {d.workerName && (
-                                <span className="text-xs text-muted-foreground">by {d.workerName}</span>
-                              )}
-                            </div>
+        {/* ─── QUALITY TECH VIEW ─── */}
+        {isTech && (
+          <div className="space-y-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <h2 className="text-2xl font-semibold mb-1">My Work Queue</h2>
+                <p className="text-muted-foreground text-sm">Inspections and NCRs assigned to you</p>
+              </div>
+              <Link href="/quality/lots">
+                <Button size="sm">
+                  <Plus size={14} className="mr-1" /> New Inspection
+                </Button>
+              </Link>
+            </div>
+
+            <div className="grid md:grid-cols-2 gap-6">
+              {/* Pending Inspections */}
+              <Card>
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-base flex items-center gap-2">
+                    <ClipboardList size={16} className="text-blue-500" />
+                    Pending Inspections
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  {pendingInspections.length === 0 ? (
+                    <p className="text-sm text-muted-foreground py-4 text-center">No pending inspections</p>
+                  ) : (
+                    <div className="space-y-2">
+                      {pendingInspections.map(i => (
+                        <Link key={i.id} href={`/quality/inspections/${i.id}`}>
+                          <div className="flex items-center justify-between p-2 rounded hover:bg-muted/50 transition-colors">
+                            <span className="font-mono text-sm font-medium">{i.lot_number}</span>
+                            <ChevronRight size={14} className="text-muted-foreground" />
                           </div>
-                          <ChevronRight size={20} className="text-muted-foreground" />
-                        </CardContent>
-                      </Card>
-                    </Link>
-                  ))}
-                  {otherDocs.map((d) => (
-                    <Card key={d.id} className="opacity-60">
-                      <CardContent className="p-4">
-                        <div className="space-y-1">
-                          <p className="font-medium">PO: {d.poNumber}</p>
-                          <p className="text-sm text-muted-foreground">
-                            {d.materialCode} — {d.customerName}
-                          </p>
-                          <div className="flex items-center gap-2">
-                            <Badge className={statusColors[d.status]}>
-                              {statusLabels[d.status]}
+                        </Link>
+                      ))}
+                      <Link href="/quality/lots">
+                        <Button variant="ghost" size="sm" className="w-full text-xs mt-1">
+                          View all lots <ArrowRight size={12} className="ml-1" />
+                        </Button>
+                      </Link>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+
+              {/* Assigned NCRs */}
+              <Card>
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-base flex items-center gap-2">
+                    <AlertTriangle size={16} className="text-red-500" />
+                    My NCRs
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  {assignedNcrs.length === 0 ? (
+                    <p className="text-sm text-muted-foreground py-4 text-center">No assigned NCRs</p>
+                  ) : (
+                    <div className="space-y-2">
+                      {assignedNcrs.map(n => (
+                        <Link key={n.id} href={`/quality/ncr/${n.id}`}>
+                          <div className="flex items-center justify-between p-2 rounded hover:bg-muted/50 transition-colors">
+                            <div>
+                              <div className="font-mono text-sm font-medium">{n.ncr_number}</div>
+                              <div className="text-xs text-muted-foreground truncate max-w-[180px]">{n.title}</div>
+                            </div>
+                            <Badge variant={n.severity === "critical" ? "destructive" : "outline"} className="text-xs">
+                              {n.severity}
                             </Badge>
-                            {d.personName && (
-                              <span className="text-xs text-muted-foreground">by {d.personName}</span>
-                            )}
                           </div>
+                        </Link>
+                      ))}
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            </div>
+          </div>
+        )}
+
+        {/* ─── WORKER VIEW ─── */}
+        {isWorker && (
+          <div className="space-y-6 max-w-md mx-auto">
+            <div className="text-center">
+              <h2 className="text-2xl font-semibold mb-1">Quality Issues</h2>
+              <p className="text-muted-foreground text-sm">Report quality problems you observe on the floor</p>
+            </div>
+
+            <Link href="/quality/ncr/new">
+              <Card className="cursor-pointer hover:border-red-500/50 transition-colors border-2 border-dashed">
+                <CardContent className="p-8 text-center">
+                  <div className="w-16 h-16 rounded-full bg-red-500/10 flex items-center justify-center mx-auto mb-4">
+                    <AlertTriangle size={28} className="text-red-500" />
+                  </div>
+                  <h3 className="text-lg font-semibold mb-1">Report Quality Issue</h3>
+                  <p className="text-sm text-muted-foreground">Tap to submit a quality concern or defect report</p>
+                </CardContent>
+              </Card>
+            </Link>
+
+            {myNcrs.length > 0 && (
+              <div>
+                <h3 className="text-sm font-medium text-muted-foreground mb-3">MY SUBMITTED REPORTS</h3>
+                <div className="space-y-2">
+                  {myNcrs.slice(0, 5).map(n => (
+                    <Card key={n.id}>
+                      <CardContent className="p-3 flex items-center justify-between">
+                        <div>
+                          <div className="font-mono text-sm font-medium">{n.ncr_number}</div>
+                          <div className="text-xs text-muted-foreground">{n.title}</div>
                         </div>
+                        <Badge variant="outline" className="text-xs capitalize">{n.status.replace(/_/g, " ")}</Badge>
                       </CardContent>
                     </Card>
                   ))}
                 </div>
               </div>
             )}
-          </>
+          </div>
         )}
       </main>
     </div>

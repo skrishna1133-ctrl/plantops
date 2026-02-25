@@ -9,7 +9,7 @@ const routeRoles: Record<string, UserRole[]> = {
   "/view": ["engineer", "admin", "owner", "super_admin"],
   "/shipments": ["shipping", "admin", "owner", "super_admin"],
   "/checklists": ["worker", "admin", "owner", "super_admin"],
-  "/quality": ["worker", "admin", "owner", "super_admin"],
+  "/quality": ["worker", "quality_tech", "quality_manager", "admin", "owner", "super_admin"],
   "/documents": ["worker", "quality_tech", "engineer", "shipping", "admin", "owner", "super_admin", "maintenance_manager", "maintenance_tech"],
   "/maintenance": ["worker", "maintenance_tech", "maintenance_manager", "engineer", "admin", "owner", "super_admin"],
 };
@@ -42,7 +42,8 @@ export async function middleware(request: NextRequest) {
   if (!allowedRoles.includes(payload.role)) {
     const redirectMap: Record<string, string> = {
       worker: "/quality",
-      quality_tech: "/lab",
+      quality_tech: "/quality",
+      quality_manager: "/quality",
       engineer: "/view",
       shipping: "/shipments",
       admin: "/admin",

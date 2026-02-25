@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { AlertTriangle, Wrench, ClipboardCheck, Package, Clock, FileText, Shield, FileCheck, LogIn, LogOut, FlaskConical, Eye, Loader2, Globe } from "lucide-react";
+import { AlertTriangle, Wrench, ClipboardCheck, Package, Clock, FileText, Shield, FileCheck, LogIn, LogOut, Eye, Loader2, Globe } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import IncidentReportDialog from "@/components/incident-report-dialog";
@@ -44,12 +44,12 @@ const tools = [
   {
     id: "quality",
     name: "Quality",
-    description: "Fill quality inspection documents for shipments",
+    description: "QMS — Inspections, NCRs, COAs",
     icon: FileCheck,
     color: "text-purple-500",
     bgColor: "bg-purple-500/10 hover:bg-purple-500/20",
     available: true,
-    requiredRoles: ["worker", "quality_tech", "admin", "owner"] as UserRole[],
+    requiredRoles: ["worker", "quality_tech", "quality_manager", "admin", "owner"] as UserRole[],
   },
   {
     id: "shipments",
@@ -97,7 +97,8 @@ const roleDashboards: Record<string, { href: string; label: string; icon: typeof
   super_admin: { href: "/platform", label: "Platform", icon: Globe },
   admin: { href: "/admin", label: "Admin", icon: Shield },
   owner: { href: "/admin", label: "Admin", icon: Shield },
-  quality_tech: { href: "/lab", label: "Quality Tech", icon: FlaskConical },
+  quality_tech: { href: "/quality", label: "Quality", icon: FileCheck },
+  quality_manager: { href: "/quality", label: "Quality", icon: FileCheck },
   engineer: { href: "/view", label: "View", icon: Eye },
   shipping: { href: "/shipments", label: "Shipments", icon: Package },
   worker: { href: "/quality", label: "Quality", icon: FileCheck },
