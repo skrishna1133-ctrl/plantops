@@ -42,6 +42,7 @@ export default function InspectionPage({ params }: { params: Promise<{ id: strin
   const [reviewDialogOpen, setReviewDialogOpen] = useState(false);
   const [reviewAction, setReviewAction] = useState<"approve" | "reject">("approve");
   const [submitResult, setSubmitResult] = useState<{ overallResult: string; flaggedCount: number } | null>(null);
+  const [uploadingPhoto, setUploadingPhoto] = useState<string | null>(null);
 
   useEffect(() => {
     params.then(p => {
@@ -122,6 +123,23 @@ export default function InspectionPage({ params }: { params: Promise<{ id: strin
       setReviewDialogOpen(false);
       router.push(`/quality/lots/${inspection?.lot_id}`);
     }
+  };
+
+  const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>, parameterId: string) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploadingPhoto(parameterId);
+    const paramName = items.find(i => i.parameter_id === parameterId)?.parameter_name || "";
+    const form = new FormData();
+    form.append("photo", file);
+    form.append("caption", paramName);
+    const res = await fetch(`/api/qms/inspections/${id}/photos`, { method: "POST", body: form });
+    if (res.ok) {
+      const data = await res.json();
+      setResultValue(parameterId, data.url);
+    }
+    setUploadingPhoto(null);
+    e.target.value = "";
   };
 
   if (loading) return <div className="min-h-screen flex items-center justify-center"><Loader2 className="animate-spin" /></div>;
@@ -233,6 +251,32 @@ export default function InspectionPage({ params }: { params: Promise<{ id: strin
                           </button>
                         ))}
                       </div>
+                    ) : item.parameter_type === "photo" ? (
+                      <div className="space-y-2">
+                        <input
+                          type="file"
+                          accept="image/*"
+                          capture="environment"
+                          id={`photo-${item.parameter_id}`}
+                          className="hidden"
+                          onChange={e => handlePhotoUpload(e, item.parameter_id)}
+                        />
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => document.getElementById(`photo-${item.parameter_id}`)?.click()}
+                          disabled={uploadingPhoto === item.parameter_id}
+                        >
+                          {uploadingPhoto === item.parameter_id
+                            ? <><Loader2 size={14} className="animate-spin mr-1" /> Uploading...</>
+                            : <><Camera size={14} className="mr-1" /> {current ? "Change Photo" : "Take / Upload Photo"}</>
+                          }
+                        </Button>
+                        {current && (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img src={current} alt="Inspection photo" className="rounded-md max-h-48 object-contain border border-border" />
+                        )}
+                      </div>
                     ) : (
                       <Input
                         type={item.parameter_type === "numeric" || item.parameter_type === "percentage" ? "number" : "text"}
@@ -256,16 +300,29 @@ export default function InspectionPage({ params }: { params: Promise<{ id: strin
           /* Read-only results view */
           <div className="space-y-3">
             <h2 className="font-semibold">Results</h2>
-            {((inspection.results || []) as Array<{ parameter_name: string; unit?: string; value: string; is_flagged: boolean; is_within_spec?: boolean; parameter_id: string }>).map((r) => (
+            {((inspection.results || []) as Array<{ parameter_name: string; unit?: string; value: string; is_flagged: boolean; is_within_spec?: boolean; parameter_id: string; parameter_type?: string }>).map((r) => (
               <Card key={r.parameter_id} className={r.is_flagged ? "border-red-500/30" : ""}>
-                <CardContent className="p-3 flex items-center justify-between">
-                  <div>
-                    <p className="text-sm font-medium">{r.parameter_name}</p>
-                    <p className="text-base font-mono">{r.value} {r.unit || ""}</p>
-                  </div>
-                  <Badge className={`text-xs ${r.is_flagged ? "bg-red-500/20 text-red-400" : "bg-green-500/20 text-green-400"}`}>
-                    {r.is_flagged ? "OUT OF SPEC" : "OK"}
-                  </Badge>
+                <CardContent className="p-3">
+                  {r.parameter_type === "photo" ? (
+                    <div>
+                      <p className="text-sm font-medium mb-2">{r.parameter_name}</p>
+                      {r.value
+                        // eslint-disable-next-line @next/next/no-img-element
+                        ? <img src={r.value} alt={r.parameter_name} className="rounded-md max-h-48 object-contain border border-border" />
+                        : <p className="text-xs text-muted-foreground">No photo captured</p>
+                      }
+                    </div>
+                  ) : (
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-sm font-medium">{r.parameter_name}</p>
+                        <p className="text-base font-mono">{r.value} {r.unit || ""}</p>
+                      </div>
+                      <Badge className={`text-xs ${r.is_flagged ? "bg-red-500/20 text-red-400" : "bg-green-500/20 text-green-400"}`}>
+                        {r.is_flagged ? "OUT OF SPEC" : "OK"}
+                      </Badge>
+                    </div>
+                  )}
                 </CardContent>
               </Card>
             ))}

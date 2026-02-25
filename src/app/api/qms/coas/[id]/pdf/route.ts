@@ -22,7 +22,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
   const summary = coa.inspection_summary as {
     overallResult?: string;
     results?: Array<{
-      parameterName: string; unit?: string; value: string;
+      parameterName: string; unit?: string; value: string; parameterType?: string;
       isWithinSpec?: boolean; isFlagged?: boolean;
       minValue?: number; maxValue?: number;
     }>;

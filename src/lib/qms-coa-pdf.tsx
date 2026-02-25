@@ -1,5 +1,5 @@
 import React from "react";
-import { Document, Page, Text, View, StyleSheet } from "@react-pdf/renderer";
+import { Document, Page, Text, View, StyleSheet, Image } from "@react-pdf/renderer";
 
 const styles = StyleSheet.create({
   page: { padding: 40, fontFamily: "Helvetica", fontSize: 10, color: "#1a1a1a" },
@@ -33,6 +33,7 @@ interface COAResult {
   parameterName: string;
   unit?: string;
   value: string;
+  parameterType?: string;
   minValue?: number;
   maxValue?: number;
   isWithinSpec?: boolean;
@@ -107,7 +108,7 @@ export function CoaPdfDocument({ data }: { data: COAData }) {
               <Text style={styles.tableHeaderCell}>Specification</Text>
               <Text style={styles.tableHeaderCell}>Status</Text>
             </View>
-            {data.results.map((r, i) => {
+            {data.results.filter(r => r.parameterType !== "photo").map((r, i) => {
               const rowStyle = i % 2 === 0 ? styles.tableRow : styles.tableRowAlt;
               const statusStyle = r.isFlagged ? styles.failCell : styles.passCell;
               const statusText = r.isFlagged ? "FAIL" : r.isWithinSpec === false ? "OOS" : "PASS";
@@ -130,6 +131,19 @@ export function CoaPdfDocument({ data }: { data: COAData }) {
             DETERMINATION: {isPassed ? "✓ APPROVED — MEETS SPECIFICATIONS" : "✗ NON-CONFORMING — DOES NOT MEET SPECIFICATIONS"}
           </Text>
         </View>
+
+        {/* Inspection Photos */}
+        {data.results.some(r => r.parameterType === "photo" && r.value) && (
+          <View style={[styles.section, { marginTop: 14 }]}>
+            <Text style={styles.sectionTitle}>INSPECTION PHOTOS</Text>
+            {data.results.filter(r => r.parameterType === "photo" && r.value).map((r, i) => (
+              <View key={i} style={{ marginBottom: 10 }}>
+                <Text style={{ fontSize: 9, fontFamily: "Helvetica-Bold", marginBottom: 4 }}>{r.parameterName}</Text>
+                <Image src={r.value} style={{ maxHeight: 160, objectFit: "contain" }} />
+              </View>
+            ))}
+          </View>
+        )}
 
         {/* Signatures */}
         <View style={styles.signatureSection}>

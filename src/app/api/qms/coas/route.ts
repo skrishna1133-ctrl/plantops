@@ -47,13 +47,14 @@ export async function POST(request: NextRequest) {
   }
 
   // Build inspection summary
-  type InspResult = { parameter_name: string; unit?: string; value: string; numeric_value?: number; is_within_spec?: boolean; is_flagged?: boolean; parameter_id: string };
+  type InspResult = { parameter_name: string; unit?: string; value: string; numeric_value?: number; is_within_spec?: boolean; is_flagged?: boolean; parameter_id: string; parameter_type?: string };
   const results = ((inspDetail?.results ?? []) as InspResult[]).map((r) => {
     const custSpec = customerSpecs.find((cs) => cs.parameter_id === r.parameter_id);
     return {
       parameterName: r.parameter_name,
       unit: r.unit,
       value: r.value,
+      parameterType: r.parameter_type,
       numericValue: r.numeric_value,
       isWithinSpec: r.is_within_spec,
       isFlagged: r.is_flagged,

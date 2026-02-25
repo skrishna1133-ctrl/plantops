@@ -13,7 +13,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
 
-const PARAM_TYPES = ["numeric", "percentage", "pass_fail", "text", "visual_rating"];
+const PARAM_TYPES = ["numeric", "percentage", "pass_fail", "text", "visual_rating", "photo"];
 
 interface MaterialType { id: string; name: string; code: string; description?: string }
 interface Parameter { id: string; name: string; code: string; parameter_type: string; unit?: string }

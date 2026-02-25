@@ -52,6 +52,10 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       const v = r.value?.toUpperCase();
       isWithinSpec = v === "PASS";
       isFlagged = v === "FAIL";
+    } else if (paramType === "photo") {
+      // Photo URL — no spec check, presence of a URL = within spec
+      isWithinSpec = !!r.value;
+      isFlagged = false;
     }
 
     return {
