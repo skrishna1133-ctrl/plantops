@@ -1,9 +1,9 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, Plus, FileText, ChevronRight } from "lucide-react";
+import { ArrowLeft, Plus, FileText, ChevronRight, Upload, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -28,8 +28,12 @@ export default function ProceduresPage() {
   const [loading, setLoading] = useState(true);
   const [showCreate, setShowCreate] = useState(false);
   const [form, setForm] = useState({ machineTypeId: "", title: "", content: "", safetyWarnings: "" });
+  const [pdfFile, setPdfFile] = useState<File | null>(null);
+  const [pdfUploading, setPdfUploading] = useState(false);
+  const [pdfUploadError, setPdfUploadError] = useState("");
   const [saving, setSaving] = useState(false);
   const [typeFilter, setTypeFilter] = useState("all");
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const isManager = ["maintenance_manager", "engineer", "admin", "owner"].includes(role);
 
@@ -52,15 +56,49 @@ export default function ProceduresPage() {
     });
   }, [router, fetchData]);
 
+  const handlePdfSelect = (file: File) => {
+    if (file.type !== "application/pdf") { setPdfUploadError("Only PDF files are allowed."); return; }
+    if (file.size > 20 * 1024 * 1024) { setPdfUploadError("File too large (max 20MB)."); return; }
+    setPdfFile(file);
+    setPdfUploadError("");
+  };
+
   const create = async () => {
-    if (!form.machineTypeId || !form.title || !form.content) return;
+    if (!form.machineTypeId || !form.title) return;
+    if (!form.content && !pdfFile) return;
     setSaving(true);
+
+    let pdfUrl: string | null = null;
+    let pdfFilename: string | null = null;
+
+    if (pdfFile) {
+      setPdfUploading(true);
+      const fd = new FormData();
+      fd.append("file", pdfFile);
+      const uploadRes = await fetch("/api/maintenance/procedures/upload", { method: "POST", body: fd });
+      setPdfUploading(false);
+      if (!uploadRes.ok) {
+        setPdfUploadError("Upload failed. Please try again.");
+        setSaving(false);
+        return;
+      }
+      const uploaded = await uploadRes.json();
+      pdfUrl = uploaded.url;
+      pdfFilename = uploaded.filename;
+    }
+
     const res = await fetch("/api/maintenance/procedures", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(form),
+      body: JSON.stringify({ ...form, content: form.content || null, pdfUrl, pdfFilename }),
     });
-    if (res.ok) { setShowCreate(false); setForm({ machineTypeId: "", title: "", content: "", safetyWarnings: "" }); fetchData(); }
+    if (res.ok) {
+      setShowCreate(false);
+      setForm({ machineTypeId: "", title: "", content: "", safetyWarnings: "" });
+      setPdfFile(null);
+      setPdfUploadError("");
+      fetchData();
+    }
     setSaving(false);
   };
 
@@ -118,7 +156,7 @@ export default function ProceduresPage() {
         )}
       </main>
 
-      <Dialog open={showCreate} onOpenChange={setShowCreate}>
+      <Dialog open={showCreate} onOpenChange={open => { setShowCreate(open); if (!open) { setPdfFile(null); setPdfUploadError(""); } }}>
         <DialogContent className="max-w-2xl">
           <DialogHeader><DialogTitle>New Procedure Sheet</DialogTitle></DialogHeader>
           <div className="space-y-4">
@@ -133,9 +171,39 @@ export default function ProceduresPage() {
               <Label>Title</Label>
               <Input className="mt-1.5" value={form.title} onChange={e => setForm(f => ({ ...f, title: e.target.value }))} placeholder="e.g. Densifier Daily Maintenance Procedure" />
             </div>
+
+            {/* PDF Upload */}
             <div>
-              <Label>Procedure Content</Label>
-              <Textarea className="mt-1.5 font-mono text-sm" rows={8} value={form.content} onChange={e => setForm(f => ({ ...f, content: e.target.value }))} placeholder="Step 1: ...&#10;Step 2: ...&#10;..." />
+              <Label>PDF Document <span className="text-muted-foreground text-xs">(optional if notes provided below)</span></Label>
+              <input ref={fileInputRef} type="file" accept="application/pdf" className="hidden"
+                onChange={e => { const f = e.target.files?.[0]; if (f) handlePdfSelect(f); }} />
+              {pdfFile ? (
+                <div className="mt-1.5 flex items-center gap-2 p-3 border border-border rounded-lg bg-muted/30">
+                  <FileText size={16} className="text-red-500 shrink-0" />
+                  <span className="text-sm flex-1 truncate">{pdfFile.name}</span>
+                  <span className="text-xs text-muted-foreground shrink-0">{(pdfFile.size / 1024 / 1024).toFixed(1)} MB</span>
+                  <Button variant="ghost" size="icon" className="h-6 w-6 shrink-0" onClick={() => { setPdfFile(null); if (fileInputRef.current) fileInputRef.current.value = ""; }}>
+                    <X size={12} />
+                  </Button>
+                </div>
+              ) : (
+                <div
+                  className="mt-1.5 border-2 border-dashed border-border rounded-lg p-6 text-center cursor-pointer hover:border-primary/50 transition-colors"
+                  onClick={() => fileInputRef.current?.click()}
+                  onDragOver={e => e.preventDefault()}
+                  onDrop={e => { e.preventDefault(); const f = e.dataTransfer.files[0]; if (f) handlePdfSelect(f); }}
+                >
+                  <Upload size={20} className="mx-auto mb-2 text-muted-foreground" />
+                  <p className="text-sm text-muted-foreground">Drop PDF here or <span className="text-primary">browse</span></p>
+                  <p className="text-xs text-muted-foreground mt-1">Max 20MB</p>
+                </div>
+              )}
+              {pdfUploadError && <p className="text-xs text-red-500 mt-1">{pdfUploadError}</p>}
+            </div>
+
+            <div>
+              <Label>Procedure Notes <span className="text-muted-foreground text-xs">(optional if PDF uploaded)</span></Label>
+              <Textarea className="mt-1.5 font-mono text-sm" rows={5} value={form.content} onChange={e => setForm(f => ({ ...f, content: e.target.value }))} placeholder="Step 1: ...&#10;Step 2: ...&#10;..." />
             </div>
             <div>
               <Label>Safety Warnings <span className="text-muted-foreground text-xs">(optional)</span></Label>
@@ -143,7 +211,12 @@ export default function ProceduresPage() {
             </div>
             <div className="flex justify-end gap-2">
               <Button variant="outline" onClick={() => setShowCreate(false)}>Cancel</Button>
-              <Button onClick={create} disabled={saving || !form.machineTypeId || !form.title || !form.content}>{saving ? "Creating..." : "Create"}</Button>
+              <Button
+                onClick={create}
+                disabled={saving || pdfUploading || !form.machineTypeId || !form.title || (!form.content && !pdfFile)}
+              >
+                {pdfUploading ? "Uploading PDF..." : saving ? "Creating..." : "Create"}
+              </Button>
             </div>
           </div>
         </DialogContent>
