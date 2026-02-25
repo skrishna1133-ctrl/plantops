@@ -41,12 +41,12 @@ export default function QualityPage() {
         setUserName(data.fullName || "");
 
         if (data.role === "quality_manager" || data.role === "admin" || data.role === "owner") {
-          // Load manager dashboard
+          // Load manager dashboard — catch individually so one failure doesn't blank the page
           const [lots, pending, ncrs, complaints] = await Promise.all([
-            fetch("/api/qms/lots").then(r => r.json()),
-            fetch("/api/qms/inspections/pending-review").then(r => r.json()),
-            fetch("/api/qms/ncrs").then(r => r.json()),
-            fetch("/api/qms/complaints").then(r => r.json()),
+            fetch("/api/qms/lots").then(r => r.json()).catch(() => []),
+            fetch("/api/qms/inspections/pending-review").then(r => r.json()).catch(() => []),
+            fetch("/api/qms/ncrs").then(r => r.json()).catch(() => []),
+            fetch("/api/qms/complaints").then(r => r.json()).catch(() => []),
           ]);
           const pendingQc = Array.isArray(lots) ? lots.filter((l: { status: string }) => l.status === "pending_qc" || l.status === "qc_in_progress").length : 0;
           const openNcrs = Array.isArray(ncrs) ? ncrs.filter((n: { status: string }) => !["closed", "cancelled"].includes(n.status)) : [];
@@ -63,8 +63,8 @@ export default function QualityPage() {
           });
         } else if (data.role === "quality_tech") {
           const [inspections, ncrs] = await Promise.all([
-            fetch("/api/qms/inspections?status=draft").then(r => r.json()),
-            fetch("/api/qms/ncrs").then(r => r.json()),
+            fetch("/api/qms/inspections?status=draft").then(r => r.json()).catch(() => []),
+            fetch("/api/qms/ncrs").then(r => r.json()).catch(() => []),
           ]);
           setPendingInspections(Array.isArray(inspections) ? inspections.slice(0, 5) : []);
           setAssignedNcrs(Array.isArray(ncrs) ? ncrs.filter((n: { status: string }) => !["closed", "cancelled"].includes(n.status)).slice(0, 5) : []);
