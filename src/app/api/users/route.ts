@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { hashPassword } from "@/lib/auth";
 import { dbUsers } from "@/lib/db";
 import { requireAuth } from "@/lib/api-auth";
+import { logActivity } from "@/lib/db-activity";
 import type { UserRole } from "@/lib/schemas";
 
 export async function GET(request: NextRequest) {
@@ -75,6 +76,8 @@ export async function POST(request: NextRequest) {
       updatedAt: now,
     }, targetTenantId);
 
+    logActivity({ tenantId: targetTenantId, userId: auth.payload.userId, role: auth.payload.role,
+      action: "created", entityType: "user", entityId: id, entityName: fullName }).catch(() => {});
     return NextResponse.json({ id, username, fullName, role });
   } catch (error) {
     const msg = error instanceof Error ? error.message : "";

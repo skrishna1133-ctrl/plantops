@@ -18,6 +18,7 @@ import {
   Package,
   Globe,
   Building2,
+  Activity,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -51,6 +52,7 @@ import QualityDocumentsTab from "@/components/admin/quality-documents-tab";
 import UsersTab from "@/components/admin/users-tab";
 import ShipmentsTab from "@/components/admin/shipments-tab";
 import SuperAdminUsersTab from "@/components/admin/super-admin-users-tab";
+import ActivityLogTab from "@/components/admin/activity-log-tab";
 import { ThemeToggle } from "@/components/theme-toggle";
 
 const criticalityColors: Record<string, string> = {
@@ -83,7 +85,7 @@ const plantLabels: Record<string, string> = {
   "plant-b": "Plant B",
 };
 
-type AdminTab = "incidents" | "checklists" | "quality" | "users" | "shipments" | "all-users";
+type AdminTab = "incidents" | "checklists" | "quality" | "users" | "shipments" | "all-users" | "activity-log";
 
 interface Tenant {
   id: string;
@@ -227,6 +229,7 @@ export default function AdminPage() {
           { id: "quality" as AdminTab, label: "Quality", icon: FlaskConical },
           { id: "users" as AdminTab, label: "Users", icon: Users },
           { id: "shipments" as AdminTab, label: "Shipments", icon: Package },
+          { id: "activity-log" as AdminTab, label: "Activity Log", icon: Activity },
         ] : []),
         { id: "all-users" as AdminTab, label: "All Users", icon: Globe },
       ]
@@ -236,6 +239,7 @@ export default function AdminPage() {
         { id: "quality" as AdminTab, label: "Quality", icon: FlaskConical },
         { id: "users" as AdminTab, label: "Users", icon: Users },
         { id: "shipments" as AdminTab, label: "Shipments", icon: Package },
+        { id: "activity-log" as AdminTab, label: "Activity Log", icon: Activity },
       ];
 
   return (
@@ -350,6 +354,9 @@ export default function AdminPage() {
 
         {/* All Users Tab (super_admin only) */}
         {activeTab === "all-users" && isSuperAdmin && <SuperAdminUsersTab />}
+
+        {/* Activity Log Tab */}
+        {activeTab === "activity-log" && <ActivityLogTab viewAs={tenantSelected ? viewAsTenant : undefined} />}
 
         {/* Incidents Tab */}
         {activeTab === "incidents" && <>

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireAuth } from "@/lib/api-auth";
+import { logActivity } from "@/lib/db-activity";
 import { dbCmmsWorkOrders, dbCmmsMachines } from "@/lib/db-cmms";
 
 const MANAGER_ROLES = ["maintenance_manager", "engineer", "admin", "owner"] as const;
@@ -22,5 +23,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   // Restore machine status to running
   await dbCmmsMachines.updateStatus(wo.machineId, tenantId, "running");
 
+  logActivity({ tenantId, userId: auth.payload.userId, role: auth.payload.role,
+    action: "closed", entityType: "work_order", entityId: id, entityName: wo.workOrderNumber }).catch(() => {});
   return NextResponse.json({ success: true });
 }

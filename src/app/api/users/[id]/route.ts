@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { hashPassword } from "@/lib/auth";
 import { dbUsers } from "@/lib/db";
 import { requireAuth } from "@/lib/api-auth";
+import { logActivity } from "@/lib/db-activity";
 import type { UserRole } from "@/lib/schemas";
 
 export async function PATCH(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -22,6 +23,8 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
   const updated = await dbUsers.update(id, updateData, auth.payload.tenantId);
   if (!updated) return NextResponse.json({ error: "User not found" }, { status: 404 });
 
+  logActivity({ tenantId: auth.payload.tenantId, userId: auth.payload.userId, role: auth.payload.role,
+    action: "updated", entityType: "user", entityId: id, entityName: body.fullName || id }).catch(() => {});
   return NextResponse.json({ success: true });
 }
 
@@ -33,5 +36,7 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
   const deleted = await dbUsers.delete(id, auth.payload.tenantId);
   if (!deleted) return NextResponse.json({ error: "User not found" }, { status: 404 });
 
+  logActivity({ tenantId: auth.payload.tenantId, userId: auth.payload.userId, role: auth.payload.role,
+    action: "deleted", entityType: "user", entityId: id, entityName: id }).catch(() => {});
   return NextResponse.json({ success: true });
 }

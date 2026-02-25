@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { incidentReportSchema } from "@/lib/schemas";
 import { dbIncidents } from "@/lib/db";
 import { requireAuth } from "@/lib/api-auth";
+import { logActivity } from "@/lib/db-activity";
 import { v4 as uuidv4 } from "uuid";
 
 function generateTicketId(): string {
@@ -55,6 +56,9 @@ export async function POST(request: NextRequest) {
     };
 
     await dbIncidents.create(incident, tenantId);
+
+    logActivity({ tenantId, userId: auth.payload.userId, role: auth.payload.role,
+      action: "created", entityType: "incident", entityId: incident.id, entityName: incident.ticketId }).catch(() => {});
 
     return NextResponse.json(
       { ticketId: incident.ticketId, id: incident.id },

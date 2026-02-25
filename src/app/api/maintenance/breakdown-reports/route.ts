@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireAuth } from "@/lib/api-auth";
+import { logActivity } from "@/lib/db-activity";
 import { dbCmmsBreakdownReports, dbCmmsNotifications } from "@/lib/db-cmms";
 import { dbUsers } from "@/lib/db";
 
@@ -48,5 +49,7 @@ export async function POST(request: NextRequest) {
     );
   }
 
+  logActivity({ tenantId, userId: auth.payload.userId, role: auth.payload.role,
+    action: "created", entityType: "breakdown_report", entityId: report.id, entityName: report.machineId }).catch(() => {});
   return NextResponse.json(report, { status: 201 });
 }

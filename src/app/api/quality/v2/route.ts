@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { dbQualityDocsV2, dbQualityTemplates } from "@/lib/db";
 import { requireAuth } from "@/lib/api-auth";
+import { logActivity } from "@/lib/db-activity";
 import { v4 as uuidv4 } from "uuid";
 import type { QualityDocumentV2, QualityFieldValue, QualityDocRowV2 } from "@/lib/schemas";
 
@@ -107,6 +108,9 @@ export async function POST(request: NextRequest) {
     };
 
     await dbQualityDocsV2.create(doc, tenantId);
+
+    logActivity({ tenantId, userId: auth.payload.userId, role: auth.payload.role,
+      action: "created", entityType: "quality_doc", entityId: doc.id, entityName: doc.docId }).catch(() => {});
 
     return NextResponse.json({ docId: doc.docId, id: doc.id }, { status: 201 });
   } catch (error) {

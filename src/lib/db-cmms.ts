@@ -70,12 +70,17 @@ export async function initCmmsTables() {
     id VARCHAR(36) PRIMARY KEY,
     procedure_sheet_id VARCHAR(36) NOT NULL,
     revision_number INTEGER NOT NULL,
-    content TEXT NOT NULL,
+    content TEXT,
     safety_warnings TEXT,
+    pdf_url TEXT,
+    pdf_filename TEXT,
     is_current BOOLEAN DEFAULT true,
     created_at VARCHAR(50) NOT NULL,
     created_by VARCHAR(36) NOT NULL
   )`;
+  // Idempotent migrations for existing tables
+  try { await sql`ALTER TABLE cmms_procedure_revisions ADD COLUMN IF NOT EXISTS pdf_url TEXT`; } catch { /* already exists */ }
+  try { await sql`ALTER TABLE cmms_procedure_revisions ADD COLUMN IF NOT EXISTS pdf_filename TEXT`; } catch { /* already exists */ }
 
   // Checklist Templates
   await sql`CREATE TABLE IF NOT EXISTS cmms_checklist_templates (
@@ -574,8 +579,10 @@ export interface CmmsProcedureRevision {
   id: string;
   procedureSheetId: string;
   revisionNumber: number;
-  content: string;
+  content: string | null;
   safetyWarnings: string | null;
+  pdfUrl: string | null;
+  pdfFilename: string | null;
   isCurrent: boolean;
   createdAt: string;
   createdBy: string;
@@ -600,8 +607,10 @@ function mapRevision(row: Record<string, unknown>): CmmsProcedureRevision {
     id: row.id as string,
     procedureSheetId: row.procedure_sheet_id as string,
     revisionNumber: Number(row.revision_number),
-    content: row.content as string,
+    content: (row.content as string) || null,
     safetyWarnings: (row.safety_warnings as string) || null,
+    pdfUrl: (row.pdf_url as string) || null,
+    pdfFilename: (row.pdf_filename as string) || null,
     isCurrent: row.is_current as boolean,
     createdAt: row.created_at as string,
     createdBy: row.created_by as string,
@@ -657,18 +666,18 @@ export const dbCmmsProcedures = {
     return result.rows.map(mapRevision);
   },
 
-  async create(tenantId: string, machineTypeId: string, title: string, content: string, safetyWarnings: string | null, createdBy: string): Promise<CmmsProcedureSheet> {
+  async create(tenantId: string, machineTypeId: string, title: string, content: string | null, safetyWarnings: string | null, createdBy: string, pdfUrl?: string | null, pdfFilename?: string | null): Promise<CmmsProcedureSheet> {
     const sheetId = uuid();
     const revId = uuid();
     const createdAt = now();
     await sql`INSERT INTO cmms_procedure_sheets (id, tenant_id, machine_type_id, title, current_revision, created_at)
       VALUES (${sheetId}, ${tenantId}, ${machineTypeId}, ${title}, 1, ${createdAt})`;
-    await sql`INSERT INTO cmms_procedure_revisions (id, procedure_sheet_id, revision_number, content, safety_warnings, is_current, created_at, created_by)
-      VALUES (${revId}, ${sheetId}, 1, ${content}, ${safetyWarnings}, true, ${createdAt}, ${createdBy})`;
-    return { id: sheetId, tenantId, machineTypeId, title, currentRevision: 1, createdAt, content, safetyWarnings: safetyWarnings || undefined };
+    await sql`INSERT INTO cmms_procedure_revisions (id, procedure_sheet_id, revision_number, content, safety_warnings, pdf_url, pdf_filename, is_current, created_at, created_by)
+      VALUES (${revId}, ${sheetId}, 1, ${content || null}, ${safetyWarnings}, ${pdfUrl || null}, ${pdfFilename || null}, true, ${createdAt}, ${createdBy})`;
+    return { id: sheetId, tenantId, machineTypeId, title, currentRevision: 1, createdAt, content: content || undefined, safetyWarnings: safetyWarnings || undefined };
   },
 
-  async addRevision(sheetId: string, tenantId: string, content: string, safetyWarnings: string | null, createdBy: string): Promise<CmmsProcedureRevision | null> {
+  async addRevision(sheetId: string, tenantId: string, content: string | null, safetyWarnings: string | null, createdBy: string, pdfUrl?: string | null, pdfFilename?: string | null): Promise<CmmsProcedureRevision | null> {
     const sheet = await sql`SELECT current_revision FROM cmms_procedure_sheets WHERE id = ${sheetId} AND tenant_id = ${tenantId}`;
     if (!sheet.rows[0]) return null;
     const nextRev = Number(sheet.rows[0].current_revision) + 1;
@@ -678,8 +687,8 @@ export const dbCmmsProcedures = {
     // Archive all existing revisions
     await sql`UPDATE cmms_procedure_revisions SET is_current = false WHERE procedure_sheet_id = ${sheetId}`;
     // Insert new revision
-    await sql`INSERT INTO cmms_procedure_revisions (id, procedure_sheet_id, revision_number, content, safety_warnings, is_current, created_at, created_by)
-      VALUES (${revId}, ${sheetId}, ${nextRev}, ${content}, ${safetyWarnings}, true, ${createdAt}, ${createdBy})`;
+    await sql`INSERT INTO cmms_procedure_revisions (id, procedure_sheet_id, revision_number, content, safety_warnings, pdf_url, pdf_filename, is_current, created_at, created_by)
+      VALUES (${revId}, ${sheetId}, ${nextRev}, ${content || null}, ${safetyWarnings}, ${pdfUrl || null}, ${pdfFilename || null}, true, ${createdAt}, ${createdBy})`;
     // Update sheet's current_revision
     await sql`UPDATE cmms_procedure_sheets SET current_revision = ${nextRev} WHERE id = ${sheetId}`;
 
@@ -696,7 +705,8 @@ export const dbCmmsProcedures = {
 
     return {
       id: revId, procedureSheetId: sheetId, revisionNumber: nextRev,
-      content, safetyWarnings, isCurrent: true, createdAt, createdBy,
+      content: content || null, safetyWarnings, pdfUrl: pdfUrl || null,
+      pdfFilename: pdfFilename || null, isCurrent: true, createdAt, createdBy,
     };
   },
 };

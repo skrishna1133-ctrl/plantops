@@ -1,5 +1,6 @@
 import { sql } from "@vercel/postgres";
 import { initCmmsTables } from "./db-cmms";
+import { initActivityTable } from "./db-activity";
 import type {
   IncidentReport,
   ChecklistTemplate,
@@ -266,6 +267,7 @@ async function initTables() {
   `;
 
   await initCmmsTables();
+  await initActivityTable();
 
   tablesInitialized = true;
 }

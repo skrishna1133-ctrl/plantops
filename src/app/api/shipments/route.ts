@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { dbShipments } from "@/lib/db";
 import { requireAuth } from "@/lib/api-auth";
+import { logActivity } from "@/lib/db-activity";
 import type { Shipment, ShipmentType, ShipmentStatus } from "@/lib/schemas";
 
 function generateShipmentId(): string {
@@ -69,6 +70,8 @@ export async function POST(request: NextRequest) {
     };
 
     await dbShipments.create(shipment, tenantId);
+    logActivity({ tenantId, userId: auth.payload.userId, role: auth.payload.role,
+      action: "created", entityType: "shipment", entityId: shipment.id, entityName: shipment.shipmentId }).catch(() => {});
     return NextResponse.json({ shipmentId: shipment.shipmentId, id: shipment.id }, { status: 201 });
   } catch (error) {
     console.error("Error creating shipment:", error);

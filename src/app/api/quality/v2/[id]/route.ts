@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { dbQualityDocsV2, dbQualityTemplates, dbUsers } from "@/lib/db";
 import { requireAuth } from "@/lib/api-auth";
+import { logActivity } from "@/lib/db-activity";
 import { evaluateFormula } from "@/lib/formula";
 import type { QualityFieldValue, QualityDocRowV2 } from "@/lib/schemas";
 
@@ -148,6 +149,8 @@ export async function PATCH(
       return NextResponse.json({ error: "Failed to update document" }, { status: 500 });
     }
 
+    logActivity({ tenantId: auth.payload.tenantId, userId: auth.payload.userId, role: auth.payload.role,
+      action: "updated", entityType: "quality_doc", entityId: id, entityName: id }).catch(() => {});
     return NextResponse.json({ success: true });
   } catch (error) {
     console.error("Error updating quality doc v2:", error);
@@ -169,6 +172,8 @@ export async function DELETE(
       return NextResponse.json({ error: "Document not found" }, { status: 404 });
     }
 
+    logActivity({ tenantId: auth.payload.tenantId, userId: auth.payload.userId, role: auth.payload.role,
+      action: "deleted", entityType: "quality_doc", entityId: id, entityName: id }).catch(() => {});
     return NextResponse.json({ success: true });
   } catch (error) {
     console.error("Error deleting quality doc v2:", error);

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireAuth } from "@/lib/api-auth";
+import { logActivity } from "@/lib/db-activity";
 import { dbCmmsWorkOrders, dbCmmsNotifications, dbCmmsMachines } from "@/lib/db-cmms";
 import { dbUsers } from "@/lib/db";
 
@@ -55,5 +56,7 @@ export async function POST(request: NextRequest) {
     });
   }
 
+  logActivity({ tenantId, userId: auth.payload.userId, role: auth.payload.role,
+    action: "created", entityType: "work_order", entityId: wo.id, entityName: wo.workOrderNumber }).catch(() => {});
   return NextResponse.json(wo, { status: 201 });
 }

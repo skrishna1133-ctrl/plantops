@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { dbIncidents } from "@/lib/db";
 import { requireAuth } from "@/lib/api-auth";
+import { logActivity } from "@/lib/db-activity";
 
 export async function PATCH(
   request: NextRequest,
@@ -26,6 +27,8 @@ export async function PATCH(
       return NextResponse.json({ error: "Incident not found" }, { status: 404 });
     }
 
+    logActivity({ tenantId: auth.payload.tenantId, userId: auth.payload.userId, role: auth.payload.role,
+      action: "updated", entityType: "incident", entityId: id, entityName: id }).catch(() => {});
     return NextResponse.json({ success: true, status });
   } catch (error) {
     console.error("Error updating incident:", error);
@@ -48,6 +51,8 @@ export async function DELETE(
       return NextResponse.json({ error: "Incident not found" }, { status: 404 });
     }
 
+    logActivity({ tenantId: auth.payload.tenantId, userId: auth.payload.userId, role: auth.payload.role,
+      action: "deleted", entityType: "incident", entityId: id, entityName: id }).catch(() => {});
     return NextResponse.json({ success: true });
   } catch (error) {
     console.error("Error deleting incident:", error);
