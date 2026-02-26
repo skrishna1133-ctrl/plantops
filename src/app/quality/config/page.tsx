@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ArrowLeft, Loader2, Plus, Settings, ChevronDown, ChevronUp, Pencil, Trash2 } from "lucide-react";
+import { STATISTICS } from "@/lib/qms-statistics";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -41,7 +42,7 @@ export default function ConfigPage() {
   const [mtForm, setMtForm] = useState({ name: "", code: "", description: "" });
   const [paramForm, setParamForm] = useState({ name: "", code: "", parameterType: "numeric", unit: "", description: "", formula: "" });
   const [tplForm, setTplForm] = useState({ name: "", materialTypeId: "" });
-  const [tplItems, setTplItems] = useState<Array<{ parameterId: string; minValue: string; maxValue: string; isRequired: boolean; instructions: string; readingCount: number }>>([]);
+  const [tplItems, setTplItems] = useState<Array<{ parameterId: string; minValue: string; maxValue: string; isRequired: boolean; instructions: string; readingCount: number; statistic: string }>>([]);
 
   const refresh = async () => {
     const [mt, p, t] = await Promise.all([
@@ -149,7 +150,7 @@ export default function ConfigPage() {
   };
 
   const addTplItem = () => {
-    setTplItems(prev => [...prev, { parameterId: "", minValue: "", maxValue: "", isRequired: true, instructions: "", readingCount: 1 }]);
+    setTplItems(prev => [...prev, { parameterId: "", minValue: "", maxValue: "", isRequired: true, instructions: "", readingCount: 1, statistic: "average" }]);
   };
 
   const saveTemplate = async () => {
@@ -162,6 +163,7 @@ export default function ConfigPage() {
       isRequired: i.isRequired,
       instructions: i.instructions || undefined,
       readingCount: i.readingCount > 1 ? i.readingCount : undefined,
+      statistic: i.readingCount > 1 ? i.statistic : undefined,
     }));
     await fetch("/api/qms/templates", {
       method: "POST",
@@ -475,15 +477,28 @@ export default function ConfigPage() {
                           <Input type="number" value={item.maxValue} onChange={e => setTplItems(prev => prev.map((it, j) => j === i ? { ...it, maxValue: e.target.value } : it))} className="h-7 text-xs mt-0.5" /></div>
                       </div>
                       {["numeric", "percentage", "visual_rating"].includes(parameters.find(p => p.id === item.parameterId)?.parameter_type ?? "") && (
-                        <div className="flex items-center gap-2">
-                          <Label className="text-xs text-muted-foreground shrink-0"># Readings</Label>
-                          <Input
-                            type="number" min="1" max="10"
-                            value={item.readingCount}
-                            onChange={e => setTplItems(prev => prev.map((it, j) => j === i ? { ...it, readingCount: Math.max(1, Math.min(10, parseInt(e.target.value) || 1)) } : it))}
-                            className="h-7 text-xs w-20"
-                          />
-                          {item.readingCount > 1 && <span className="text-xs text-blue-400">avg will be checked against spec</span>}
+                        <div className="space-y-1.5">
+                          <div className="flex items-center gap-2">
+                            <Label className="text-xs text-muted-foreground shrink-0 w-20"># Readings</Label>
+                            <Input
+                              type="number" min="1" max="10"
+                              value={item.readingCount}
+                              onChange={e => setTplItems(prev => prev.map((it, j) => j === i ? { ...it, readingCount: Math.max(1, Math.min(10, parseInt(e.target.value) || 1)) } : it))}
+                              className="h-7 text-xs w-20"
+                            />
+                          </div>
+                          {item.readingCount > 1 && (
+                            <div className="flex items-center gap-2">
+                              <Label className="text-xs text-muted-foreground shrink-0 w-20">Statistic</Label>
+                              <select
+                                value={item.statistic}
+                                onChange={e => setTplItems(prev => prev.map((it, j) => j === i ? { ...it, statistic: e.target.value } : it))}
+                                className="flex-1 border border-input bg-background text-xs rounded-md px-2 py-1"
+                              >
+                                {STATISTICS.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
+                              </select>
+                            </div>
+                          )}
                         </div>
                       )}
                       <div className="flex items-center justify-between">

@@ -52,6 +52,7 @@ export async function POST(request: NextRequest) {
         isRequired: item.isRequired !== false,
         instructions: item.instructions,
         readingCount: item.readingCount ?? 1,
+        statistic: item.statistic ?? "average",
       });
     }
   }

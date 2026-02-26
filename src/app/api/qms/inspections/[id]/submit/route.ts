@@ -4,6 +4,7 @@ import { dbQmsInspections, dbQmsTemplates, dbQmsLots } from "@/lib/db-qms";
 import { initDb } from "@/lib/db";
 import { logActivity } from "@/lib/db-activity";
 import { evaluateFormula } from "@/lib/formula-eval";
+import { computeStatistic } from "@/lib/qms-statistics";
 
 const QT = ["quality_tech", "quality_manager", "admin", "owner"] as const;
 
@@ -24,7 +25,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
 
   // Load template items for min/max spec checking
   const template = await dbQmsTemplates.getById(inspection.template_id, auth.payload.tenantId!);
-  const itemMap: Record<string, { min_value: number | null; max_value: number | null; parameter_type: string; parameter_code: string; formula: string | null; parameter_name: string; reading_count: number }> = {};
+  const itemMap: Record<string, { min_value: number | null; max_value: number | null; parameter_type: string; parameter_code: string; formula: string | null; parameter_name: string; reading_count: number; statistic: string }> = {};
   for (const item of template?.items ?? []) {
     itemMap[item.parameter_id] = {
       min_value: item.min_value,
@@ -34,6 +35,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       formula: item.formula ?? null,
       parameter_name: item.parameter_name,
       reading_count: item.reading_count ?? 1,
+      statistic: item.statistic ?? "average",
     };
   }
 
@@ -67,14 +69,14 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     const spec = itemMap[r.parameterId];
     const paramType = spec?.parameter_type ?? "text";
 
-    // Handle multi-reading: value is a JSON array — compute average for spec check
+    // Handle multi-reading: value is a JSON array — compute chosen statistic for spec check
     let valueForEval = r.value;
     if ((spec?.reading_count ?? 1) > 1 && (paramType === "numeric" || paramType === "percentage" || paramType === "visual_rating")) {
       try {
         const readings = JSON.parse(r.value) as number[];
         if (Array.isArray(readings) && readings.length > 0) {
-          const avg = readings.reduce((a, b) => a + b, 0) / readings.length;
-          valueForEval = avg.toFixed(6).replace(/\.?0+$/, "");
+          const computed = computeStatistic(readings, spec?.statistic ?? "average");
+          if (computed !== null) valueForEval = computed.toFixed(6).replace(/\.?0+$/, "");
         }
       } catch { /* not JSON, use as-is */ }
     }

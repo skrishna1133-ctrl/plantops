@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ArrowLeft, Loader2, Camera, CheckCircle2, XCircle, AlertTriangle, ChevronRight } from "lucide-react";
+import { computeStatistic, statisticLabel } from "@/lib/qms-statistics";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -24,6 +25,7 @@ interface TemplateItem {
   formula?: string;
   parameter_code?: string;
   reading_count?: number;
+  statistic?: string;
 }
 
 interface ResultEntry {
@@ -84,19 +86,19 @@ export default function InspectionPage({ params }: { params: Promise<{ id: strin
     setResults(prev => ({ ...prev, [parameterId]: { ...prev[parameterId], parameterId, value } }));
   };
 
-  const getMultiAvg = (parameterId: string, count: number): number | null => {
+  const getMultiStat = (parameterId: string, count: number, statistic: string): number | null => {
     const readings = multiReadings[parameterId] || [];
     const nums = readings.slice(0, count).map(v => parseFloat(v)).filter(n => !isNaN(n));
     if (nums.length === 0) return null;
-    return nums.reduce((a, b) => a + b, 0) / nums.length;
+    return computeStatistic(nums, statistic);
   };
 
   const isOutOfSpec = (item: TemplateItem, value: string): boolean => {
     if ((item.reading_count ?? 1) > 1) {
-      const avg = getMultiAvg(item.parameter_id, item.reading_count!);
-      if (avg === null) return false;
-      if (item.min_value != null && avg < item.min_value) return true;
-      if (item.max_value != null && avg > item.max_value) return true;
+      const stat = getMultiStat(item.parameter_id, item.reading_count!, item.statistic ?? "average");
+      if (stat === null) return false;
+      if (item.min_value != null && stat < item.min_value) return true;
+      if (item.max_value != null && stat > item.max_value) return true;
       return false;
     }
     if (!value) return false;
@@ -331,12 +333,12 @@ export default function InspectionPage({ params }: { params: Promise<{ id: strin
                           </div>
                         ))}
                         {(() => {
-                          const avg = getMultiAvg(item.parameter_id, item.reading_count!);
-                          if (avg === null) return null;
-                          const outOfSpec = (item.min_value != null && avg < item.min_value) || (item.max_value != null && avg > item.max_value);
+                          const stat = getMultiStat(item.parameter_id, item.reading_count!, item.statistic ?? "average");
+                          if (stat === null) return null;
+                          const outOfSpec = (item.min_value != null && stat < item.min_value) || (item.max_value != null && stat > item.max_value);
                           return (
                             <div className={`text-sm font-mono px-3 py-1.5 rounded-md ${outOfSpec ? "text-red-400 bg-red-500/10" : "text-green-400 bg-green-500/10"}`}>
-                              Average: {avg.toFixed(4).replace(/\.?0+$/, "")} {item.unit || ""}
+                              {statisticLabel(item.statistic ?? "average")}: {stat.toFixed(4).replace(/\.?0+$/, "")} {item.unit || ""}
                               {outOfSpec && <span className="ml-2 text-xs font-sans">Out of spec</span>}
                             </div>
                           );
@@ -372,7 +374,8 @@ export default function InspectionPage({ params }: { params: Promise<{ id: strin
                 const parsed = JSON.parse(r.value);
                 if (Array.isArray(parsed) && parsed.every((v: unknown) => typeof v === "number")) readingsArr = parsed;
               } catch { /* not JSON */ }
-              const readingsAvg = readingsArr ? readingsArr.reduce((a, b) => a + b, 0) / readingsArr.length : null;
+              const readingsStat = readingsArr ? computeStatistic(readingsArr, (r as { statistic?: string }).statistic ?? "average") : null;
+              const readingsStatLabel = statisticLabel((r as { statistic?: string }).statistic ?? "average");
 
               return (
                 <Card key={r.parameter_id} className={r.is_flagged ? "border-red-500/30" : ""}>
@@ -393,7 +396,7 @@ export default function InspectionPage({ params }: { params: Promise<{ id: strin
                           <p className="text-xs text-muted-foreground mt-0.5">
                             {readingsArr.map((v, i) => `R${i + 1}: ${v}`).join(" · ")}
                           </p>
-                          <p className="text-base font-mono mt-0.5">avg: {readingsAvg!.toFixed(4).replace(/\.?0+$/, "")} {r.unit || ""}</p>
+                          <p className="text-base font-mono mt-0.5">{readingsStatLabel}: {readingsStat!.toFixed(4).replace(/\.?0+$/, "")} {r.unit || ""}</p>
                         </div>
                         <Badge className={`text-xs shrink-0 ${r.is_flagged ? "bg-red-500/20 text-red-400" : "bg-green-500/20 text-green-400"}`}>
                           {r.is_flagged ? "OUT OF SPEC" : "OK"}

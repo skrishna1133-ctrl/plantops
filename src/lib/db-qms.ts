@@ -58,6 +58,7 @@ export async function initQmsTables() {
     instructions TEXT
   )`;
   await sql`ALTER TABLE qms_template_items ADD COLUMN IF NOT EXISTS reading_count INT DEFAULT 1`;
+  await sql`ALTER TABLE qms_template_items ADD COLUMN IF NOT EXISTS statistic VARCHAR(20) DEFAULT 'average'`;
 
   // Lots
   await sql`CREATE TABLE IF NOT EXISTS qms_lots (
@@ -374,10 +375,11 @@ export const dbQmsTemplates = {
     isRequired: boolean;
     instructions?: string;
     readingCount?: number;
+    statistic?: string;
   }) {
     await sql`
-      INSERT INTO qms_template_items (id, template_id, parameter_id, order_num, min_value, max_value, target_value, is_required, instructions, reading_count)
-      VALUES (${data.id}, ${data.templateId}, ${data.parameterId}, ${data.orderNum}, ${data.minValue ?? null}, ${data.maxValue ?? null}, ${data.targetValue ?? null}, ${data.isRequired}, ${data.instructions ?? null}, ${data.readingCount ?? 1})
+      INSERT INTO qms_template_items (id, template_id, parameter_id, order_num, min_value, max_value, target_value, is_required, instructions, reading_count, statistic)
+      VALUES (${data.id}, ${data.templateId}, ${data.parameterId}, ${data.orderNum}, ${data.minValue ?? null}, ${data.maxValue ?? null}, ${data.targetValue ?? null}, ${data.isRequired}, ${data.instructions ?? null}, ${data.readingCount ?? 1}, ${data.statistic ?? "average"})
     `;
   },
 
