@@ -4,6 +4,7 @@
  */
 
 export const STATISTICS = [
+  { value: "none",     label: "None (record only)" },
   { value: "average",  label: "Average (Mean)" },
   { value: "median",   label: "Median" },
   { value: "sum",      label: "Sum" },
@@ -29,6 +30,9 @@ export function computeStatistic(readings: number[], statistic: string): number 
   if (readings.length === 0) return null;
 
   switch (statistic) {
+    case "none":
+      return null; // record readings only, no aggregation
+
     case "average":
       return readings.reduce((a, b) => a + b, 0) / readings.length;
 
