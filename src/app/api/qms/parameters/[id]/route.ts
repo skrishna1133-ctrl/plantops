@@ -13,9 +13,15 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
 
   const { id } = await params;
   const body = await request.json();
-  await dbQmsParameters.update(id, auth.payload.tenantId!, body);
+  const { name, unit, description, formula } = body;
+
+  if (!name) {
+    return NextResponse.json({ error: "name is required" }, { status: 400 });
+  }
+
+  await dbQmsParameters.update(id, auth.payload.tenantId!, { name, unit, description, formula: formula || null });
 
   logActivity({ tenantId: auth.payload.tenantId!, userId: auth.payload.userId, role: auth.payload.role,
-    action: "updated", entityType: "qms_parameter", entityId: id, entityName: body.name || id }).catch(() => {});
+    action: "updated", entityType: "qms_parameter", entityId: id, entityName: name }).catch(() => {});
   return NextResponse.json({ success: true });
 }

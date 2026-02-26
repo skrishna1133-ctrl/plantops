@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, Loader2, Plus, Settings, ChevronDown, ChevronUp } from "lucide-react";
+import { ArrowLeft, Loader2, Plus, Settings, ChevronDown, ChevronUp, Pencil } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -30,6 +30,9 @@ export default function ConfigPage() {
   const [newMtOpen, setNewMtOpen] = useState(false);
   const [newParamOpen, setNewParamOpen] = useState(false);
   const [newTplOpen, setNewTplOpen] = useState(false);
+  const [editParamOpen, setEditParamOpen] = useState(false);
+  const [editingParam, setEditingParam] = useState<Parameter | null>(null);
+  const [editParamForm, setEditParamForm] = useState({ name: "", unit: "", description: "", formula: "" });
   const [saving, setSaving] = useState(false);
 
   // Forms
@@ -84,6 +87,31 @@ export default function ConfigPage() {
     });
     setParamForm({ name: "", code: "", parameterType: "numeric", unit: "", description: "", formula: "" });
     setNewParamOpen(false);
+    await refresh();
+    setSaving(false);
+  };
+
+  const openEditParam = (p: Parameter) => {
+    setEditingParam(p);
+    setEditParamForm({ name: p.name, unit: p.unit || "", description: "", formula: p.formula || "" });
+    setEditParamOpen(true);
+  };
+
+  const updateParameter = async () => {
+    if (!editingParam || !editParamForm.name) return;
+    setSaving(true);
+    await fetch(`/api/qms/parameters/${editingParam.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        name: editParamForm.name,
+        unit: editParamForm.unit || undefined,
+        description: editParamForm.description || undefined,
+        formula: editingParam.parameter_type === "calculated" ? editParamForm.formula : null,
+      }),
+    });
+    setEditParamOpen(false);
+    setEditingParam(null);
     await refresh();
     setSaving(false);
   };
@@ -184,6 +212,9 @@ export default function ConfigPage() {
                       <p className="text-xs text-muted-foreground">{p.parameter_type}{p.unit ? ` · ${p.unit}` : ""}</p>
                       {p.formula && <p className="text-xs font-mono text-blue-400 mt-0.5">= {p.formula}</p>}
                     </div>
+                    <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => openEditParam(p)}>
+                      <Pencil size={13} />
+                    </Button>
                   </CardContent>
                 </Card>
               ))}
@@ -293,6 +324,51 @@ export default function ConfigPage() {
             <Button variant="outline" onClick={() => setNewParamOpen(false)}>Cancel</Button>
             <Button onClick={saveParameter} disabled={!paramForm.name || !paramForm.code || (paramForm.parameterType === "calculated" && !paramForm.formula) || saving}>
               {saving ? <Loader2 size={14} className="animate-spin mr-1" /> : null} Save
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit Parameter Dialog */}
+      <Dialog open={editParamOpen} onOpenChange={setEditParamOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader><DialogTitle>Edit Parameter</DialogTitle></DialogHeader>
+          {editingParam && (
+            <div className="space-y-3">
+              <div className="flex items-center gap-2 p-2 rounded bg-muted/40 text-xs text-muted-foreground">
+                <Badge variant="outline" className="font-mono">{editingParam.code}</Badge>
+                <span>{editingParam.parameter_type}</span>
+                <span className="text-xs text-amber-400 ml-auto">Code cannot be changed</span>
+              </div>
+              <div><Label>Name <span className="text-red-400">*</span></Label>
+                <Input value={editParamForm.name} onChange={e => setEditParamForm(f => ({ ...f, name: e.target.value }))} className="mt-1" /></div>
+              <div><Label>Unit{editingParam.parameter_type === "calculated" ? " (display only)" : ""}</Label>
+                <Input value={editParamForm.unit} onChange={e => setEditParamForm(f => ({ ...f, unit: e.target.value }))} className="mt-1" placeholder="g/cc, %, kg..." /></div>
+              {editingParam.parameter_type === "calculated" && (
+                <div>
+                  <Label>Formula <span className="text-red-400">*</span></Label>
+                  <Input value={editParamForm.formula} onChange={e => setEditParamForm(f => ({ ...f, formula: e.target.value }))} className="mt-1 font-mono" />
+                  {parameters.filter(p => p.parameter_type !== "calculated" && p.parameter_type !== "photo" && p.parameter_type !== "pass_fail" && p.parameter_type !== "text").length > 0 && (
+                    <div className="mt-2 p-2 rounded bg-muted/40 text-xs">
+                      <p className="font-medium mb-1 text-muted-foreground">Available codes:</p>
+                      <div className="flex flex-wrap gap-1">
+                        {parameters.filter(p => p.id !== editingParam.id && p.parameter_type !== "photo" && p.parameter_type !== "pass_fail" && p.parameter_type !== "text").map(p => (
+                          <code key={p.id} className="bg-background border border-border rounded px-1 py-0.5 cursor-pointer hover:bg-muted"
+                            onClick={() => setEditParamForm(f => ({ ...f, formula: f.formula + p.code }))}>
+                            {p.code}
+                          </code>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEditParamOpen(false)}>Cancel</Button>
+            <Button onClick={updateParameter} disabled={!editParamForm.name || (editingParam?.parameter_type === "calculated" && !editParamForm.formula) || saving}>
+              {saving ? <Loader2 size={14} className="animate-spin mr-1" /> : null} Save Changes
             </Button>
           </DialogFooter>
         </DialogContent>

@@ -291,13 +291,14 @@ export const dbQmsParameters = {
     `;
   },
 
-  async update(id: string, tenantId: string, data: { name?: string; unit?: string; description?: string }) {
+  async update(id: string, tenantId: string, data: { name: string; unit?: string; description?: string; formula?: string | null }) {
     await sql`
       UPDATE qms_parameters
       SET
-        name = COALESCE(${data.name ?? null}, name),
-        unit = COALESCE(${data.unit ?? null}, unit),
-        description = COALESCE(${data.description ?? null}, description)
+        name = ${data.name},
+        unit = ${data.unit ?? null},
+        description = ${data.description ?? null},
+        formula = ${data.formula ?? null}
       WHERE id = ${id} AND tenant_id = ${tenantId}
     `;
   },
