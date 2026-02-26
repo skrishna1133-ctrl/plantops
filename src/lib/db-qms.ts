@@ -302,6 +302,13 @@ export const dbQmsParameters = {
       WHERE id = ${id} AND tenant_id = ${tenantId}
     `;
   },
+
+  async deleteByIds(ids: string[], tenantId: string): Promise<void> {
+    for (const id of ids) {
+      await sql`DELETE FROM qms_template_items WHERE parameter_id = ${id}`;
+      await sql`DELETE FROM qms_parameters WHERE id = ${id} AND tenant_id = ${tenantId}`;
+    }
+  },
 };
 
 // ─── Templates ───────────────────────────────────────────────────────────────

@@ -25,3 +25,21 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     action: "updated", entityType: "qms_parameter", entityId: id, entityName: name }).catch(() => {});
   return NextResponse.json({ success: true });
 }
+
+export async function DELETE(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const auth = await requireAuth(request, [...QM]);
+  if (!auth.ok) return auth.response;
+  await initDb();
+
+  const { id } = await params;
+  const body = await request.json().catch(() => ({}));
+  // dependentIds: IDs of calculated parameters whose formulas reference this parameter
+  const dependentIds: string[] = Array.isArray(body.dependentIds) ? body.dependentIds : [];
+
+  const toDelete = [id, ...dependentIds];
+  await dbQmsParameters.deleteByIds(toDelete, auth.payload.tenantId!);
+
+  logActivity({ tenantId: auth.payload.tenantId!, userId: auth.payload.userId, role: auth.payload.role,
+    action: "deleted", entityType: "qms_parameter", entityId: id, entityName: id }).catch(() => {});
+  return NextResponse.json({ success: true, deletedCount: toDelete.length });
+}

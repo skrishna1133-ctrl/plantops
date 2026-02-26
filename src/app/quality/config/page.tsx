@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, Loader2, Plus, Settings, ChevronDown, ChevronUp, Pencil } from "lucide-react";
+import { ArrowLeft, Loader2, Plus, Settings, ChevronDown, ChevronUp, Pencil, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -33,6 +33,8 @@ export default function ConfigPage() {
   const [editParamOpen, setEditParamOpen] = useState(false);
   const [editingParam, setEditingParam] = useState<Parameter | null>(null);
   const [editParamForm, setEditParamForm] = useState({ name: "", unit: "", description: "", formula: "" });
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [dependentParams, setDependentParams] = useState<Parameter[]>([]);
   const [saving, setSaving] = useState(false);
 
   // Forms
@@ -94,7 +96,37 @@ export default function ConfigPage() {
   const openEditParam = (p: Parameter) => {
     setEditingParam(p);
     setEditParamForm({ name: p.name, unit: p.unit || "", description: "", formula: p.formula || "" });
+    setConfirmDelete(false);
+    setDependentParams([]);
     setEditParamOpen(true);
+  };
+
+  const handleDeleteClick = () => {
+    if (!editingParam) return;
+    // Find calculated parameters whose formula references this parameter's code as a whole token
+    const deps = parameters.filter(p =>
+      p.id !== editingParam.id &&
+      p.formula &&
+      p.formula.split(/[^a-zA-Z0-9_]+/).includes(editingParam.code)
+    );
+    setDependentParams(deps);
+    setConfirmDelete(true);
+  };
+
+  const deleteParameter = async () => {
+    if (!editingParam) return;
+    setSaving(true);
+    await fetch(`/api/qms/parameters/${editingParam.id}`, {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ dependentIds: dependentParams.map(p => p.id) }),
+    });
+    setEditParamOpen(false);
+    setEditingParam(null);
+    setConfirmDelete(false);
+    setDependentParams([]);
+    await refresh();
+    setSaving(false);
   };
 
   const updateParameter = async () => {
@@ -365,11 +397,42 @@ export default function ConfigPage() {
               )}
             </div>
           )}
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setEditParamOpen(false)}>Cancel</Button>
-            <Button onClick={updateParameter} disabled={!editParamForm.name || (editingParam?.parameter_type === "calculated" && !editParamForm.formula) || saving}>
-              {saving ? <Loader2 size={14} className="animate-spin mr-1" /> : null} Save Changes
+          {confirmDelete ? (
+            <div className="rounded-md border border-red-500/40 bg-red-500/5 p-3 space-y-2">
+              <p className="text-sm font-medium text-red-400">Confirm deletion</p>
+              {dependentParams.length > 0 ? (
+                <div>
+                  <p className="text-xs text-muted-foreground mb-1">
+                    The following calculated parameters reference <code className="font-mono">{editingParam?.code}</code> and will also be deleted:
+                  </p>
+                  <ul className="text-xs space-y-0.5">
+                    {dependentParams.map(p => (
+                      <li key={p.id} className="font-medium text-red-300">• {p.name} <span className="font-mono font-normal text-muted-foreground">({p.code})</span></li>
+                    ))}
+                  </ul>
+                </div>
+              ) : (
+                <p className="text-xs text-muted-foreground">No other parameters depend on this one.</p>
+              )}
+              <div className="flex gap-2 pt-1">
+                <Button size="sm" variant="outline" onClick={() => setConfirmDelete(false)} className="flex-1">Cancel</Button>
+                <Button size="sm" onClick={deleteParameter} disabled={saving} className="flex-1 bg-red-600 hover:bg-red-700 text-white">
+                  {saving ? <Loader2 size={13} className="animate-spin mr-1" /> : <Trash2 size={13} className="mr-1" />}
+                  Delete {dependentParams.length > 0 ? `(${dependentParams.length + 1})` : ""}
+                </Button>
+              </div>
+            </div>
+          ) : null}
+          <DialogFooter className="flex-row justify-between gap-2">
+            <Button variant="ghost" size="sm" className="text-red-400 hover:text-red-300 hover:bg-red-500/10" onClick={handleDeleteClick} disabled={saving}>
+              <Trash2 size={14} className="mr-1" /> Delete
             </Button>
+            <div className="flex gap-2">
+              <Button variant="outline" onClick={() => setEditParamOpen(false)}>Cancel</Button>
+              <Button onClick={updateParameter} disabled={confirmDelete || !editParamForm.name || (editingParam?.parameter_type === "calculated" && !editParamForm.formula) || saving}>
+                {saving ? <Loader2 size={14} className="animate-spin mr-1" /> : null} Save Changes
+              </Button>
+            </div>
           </DialogFooter>
         </DialogContent>
       </Dialog>
