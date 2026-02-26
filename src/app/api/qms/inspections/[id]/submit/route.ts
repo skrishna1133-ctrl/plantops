@@ -24,7 +24,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
 
   // Load template items for min/max spec checking
   const template = await dbQmsTemplates.getById(inspection.template_id, auth.payload.tenantId!);
-  const itemMap: Record<string, { min_value: number | null; max_value: number | null; parameter_type: string; parameter_code: string; formula: string | null; parameter_name: string }> = {};
+  const itemMap: Record<string, { min_value: number | null; max_value: number | null; parameter_type: string; parameter_code: string; formula: string | null; parameter_name: string; reading_count: number }> = {};
   for (const item of template?.items ?? []) {
     itemMap[item.parameter_id] = {
       min_value: item.min_value,
@@ -33,6 +33,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       parameter_code: item.parameter_code,
       formula: item.formula ?? null,
       parameter_name: item.parameter_name,
+      reading_count: item.reading_count ?? 1,
     };
   }
 
@@ -65,12 +66,25 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   const evaluatedResults = (rawResults ?? []).map((r: { parameterId: string; value: string; notes?: string }) => {
     const spec = itemMap[r.parameterId];
     const paramType = spec?.parameter_type ?? "text";
-    const { numericValue, isWithinSpec, isFlagged } = evaluateResult(paramType, r.value, spec ?? { min_value: null, max_value: null });
+
+    // Handle multi-reading: value is a JSON array — compute average for spec check
+    let valueForEval = r.value;
+    if ((spec?.reading_count ?? 1) > 1 && (paramType === "numeric" || paramType === "percentage" || paramType === "visual_rating")) {
+      try {
+        const readings = JSON.parse(r.value) as number[];
+        if (Array.isArray(readings) && readings.length > 0) {
+          const avg = readings.reduce((a, b) => a + b, 0) / readings.length;
+          valueForEval = avg.toFixed(6).replace(/\.?0+$/, "");
+        }
+      } catch { /* not JSON, use as-is */ }
+    }
+
+    const { numericValue, isWithinSpec, isFlagged } = evaluateResult(paramType, valueForEval, spec ?? { min_value: null, max_value: null });
     return {
       id: crypto.randomUUID(),
       parameterId: r.parameterId,
-      value: r.value,
-      numericValue,
+      value: r.value,      // keep original (JSON array string for multi-reading)
+      numericValue,        // average for multi-reading, single value otherwise
       isWithinSpec,
       isFlagged,
       notes: r.notes,

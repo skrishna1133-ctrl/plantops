@@ -51,6 +51,7 @@ export async function POST(request: NextRequest) {
         targetValue: item.targetValue,
         isRequired: item.isRequired !== false,
         instructions: item.instructions,
+        readingCount: item.readingCount ?? 1,
       });
     }
   }

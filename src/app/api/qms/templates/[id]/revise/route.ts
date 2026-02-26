@@ -38,6 +38,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         targetValue: item.targetValue,
         isRequired: item.isRequired !== false,
         instructions: item.instructions,
+        readingCount: item.readingCount ?? 1,
       });
     }
   }

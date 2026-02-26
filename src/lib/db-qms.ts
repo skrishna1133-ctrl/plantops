@@ -57,6 +57,7 @@ export async function initQmsTables() {
     is_required BOOLEAN NOT NULL DEFAULT true,
     instructions TEXT
   )`;
+  await sql`ALTER TABLE qms_template_items ADD COLUMN IF NOT EXISTS reading_count INT DEFAULT 1`;
 
   // Lots
   await sql`CREATE TABLE IF NOT EXISTS qms_lots (
@@ -372,10 +373,11 @@ export const dbQmsTemplates = {
     targetValue?: number;
     isRequired: boolean;
     instructions?: string;
+    readingCount?: number;
   }) {
     await sql`
-      INSERT INTO qms_template_items (id, template_id, parameter_id, order_num, min_value, max_value, target_value, is_required, instructions)
-      VALUES (${data.id}, ${data.templateId}, ${data.parameterId}, ${data.orderNum}, ${data.minValue ?? null}, ${data.maxValue ?? null}, ${data.targetValue ?? null}, ${data.isRequired}, ${data.instructions ?? null})
+      INSERT INTO qms_template_items (id, template_id, parameter_id, order_num, min_value, max_value, target_value, is_required, instructions, reading_count)
+      VALUES (${data.id}, ${data.templateId}, ${data.parameterId}, ${data.orderNum}, ${data.minValue ?? null}, ${data.maxValue ?? null}, ${data.targetValue ?? null}, ${data.isRequired}, ${data.instructions ?? null}, ${data.readingCount ?? 1})
     `;
   },
 

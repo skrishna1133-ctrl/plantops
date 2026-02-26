@@ -23,6 +23,7 @@ interface TemplateItem {
   instructions?: string;
   formula?: string;
   parameter_code?: string;
+  reading_count?: number;
 }
 
 interface ResultEntry {
@@ -45,6 +46,7 @@ export default function InspectionPage({ params }: { params: Promise<{ id: strin
   const [reviewAction, setReviewAction] = useState<"approve" | "reject">("approve");
   const [submitResult, setSubmitResult] = useState<{ overallResult: string; flaggedCount: number } | null>(null);
   const [uploadingPhoto, setUploadingPhoto] = useState<string | null>(null);
+  const [multiReadings, setMultiReadings] = useState<Record<string, string[]>>({});
 
   useEffect(() => {
     params.then(p => {
@@ -82,7 +84,21 @@ export default function InspectionPage({ params }: { params: Promise<{ id: strin
     setResults(prev => ({ ...prev, [parameterId]: { ...prev[parameterId], parameterId, value } }));
   };
 
+  const getMultiAvg = (parameterId: string, count: number): number | null => {
+    const readings = multiReadings[parameterId] || [];
+    const nums = readings.slice(0, count).map(v => parseFloat(v)).filter(n => !isNaN(n));
+    if (nums.length === 0) return null;
+    return nums.reduce((a, b) => a + b, 0) / nums.length;
+  };
+
   const isOutOfSpec = (item: TemplateItem, value: string): boolean => {
+    if ((item.reading_count ?? 1) > 1) {
+      const avg = getMultiAvg(item.parameter_id, item.reading_count!);
+      if (avg === null) return false;
+      if (item.min_value != null && avg < item.min_value) return true;
+      if (item.max_value != null && avg > item.max_value) return true;
+      return false;
+    }
     if (!value) return false;
     if (item.parameter_type === "pass_fail") return value.toUpperCase() === "FAIL";
     const num = parseFloat(value);
@@ -94,11 +110,20 @@ export default function InspectionPage({ params }: { params: Promise<{ id: strin
 
   const handleSubmit = async () => {
     setSubmitting(true);
-    const resultList = Object.values(results).map(r => ({
-      parameterId: r.parameterId,
-      value: r.value,
-      notes: r.notes,
-    }));
+    // Build resultList — multi-reading params get serialized as JSON array
+    const resultList = items.map(item => {
+      const r = results[item.parameter_id];
+      if ((item.reading_count ?? 1) > 1) {
+        const nums = (multiReadings[item.parameter_id] || [])
+          .slice(0, item.reading_count)
+          .map(v => parseFloat(v))
+          .filter(n => !isNaN(n));
+        return { parameterId: item.parameter_id, value: JSON.stringify(nums), notes: r?.notes };
+      }
+      if (!r) return null;
+      return { parameterId: r.parameterId, value: r.value, notes: r.notes };
+    }).filter(Boolean) as Array<{ parameterId: string; value: string; notes?: string }>;
+
     const res = await fetch(`/api/qms/inspections/${id}/submit`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -284,6 +309,39 @@ export default function InspectionPage({ params }: { params: Promise<{ id: strin
                         Auto-calculated on submit
                         {item.formula && <span className="ml-2 font-mono text-xs text-blue-400">({item.formula})</span>}
                       </div>
+                    ) : (item.reading_count ?? 1) > 1 ? (
+                      <div className="space-y-2">
+                        {Array.from({ length: item.reading_count! }, (_, idx) => (
+                          <div key={idx} className="flex items-center gap-2">
+                            <span className="text-xs text-muted-foreground w-20 shrink-0">Reading {idx + 1}</span>
+                            <Input
+                              type="number"
+                              value={multiReadings[item.parameter_id]?.[idx] || ""}
+                              onChange={e => {
+                                const val = e.target.value;
+                                setMultiReadings(prev => {
+                                  const arr = [...(prev[item.parameter_id] || Array(item.reading_count!).fill(""))];
+                                  arr[idx] = val;
+                                  return { ...prev, [item.parameter_id]: arr };
+                                });
+                              }}
+                              placeholder={item.unit ? `Value in ${item.unit}` : "Value"}
+                              className="flex-1"
+                            />
+                          </div>
+                        ))}
+                        {(() => {
+                          const avg = getMultiAvg(item.parameter_id, item.reading_count!);
+                          if (avg === null) return null;
+                          const outOfSpec = (item.min_value != null && avg < item.min_value) || (item.max_value != null && avg > item.max_value);
+                          return (
+                            <div className={`text-sm font-mono px-3 py-1.5 rounded-md ${outOfSpec ? "text-red-400 bg-red-500/10" : "text-green-400 bg-green-500/10"}`}>
+                              Average: {avg.toFixed(4).replace(/\.?0+$/, "")} {item.unit || ""}
+                              {outOfSpec && <span className="ml-2 text-xs font-sans">Out of spec</span>}
+                            </div>
+                          );
+                        })()}
+                      </div>
                     ) : (
                       <Input
                         type={item.parameter_type === "numeric" || item.parameter_type === "percentage" ? "number" : "text"}
@@ -307,32 +365,55 @@ export default function InspectionPage({ params }: { params: Promise<{ id: strin
           /* Read-only results view */
           <div className="space-y-3">
             <h2 className="font-semibold">Results</h2>
-            {((inspection.results || []) as Array<{ parameter_name: string; unit?: string; value: string; is_flagged: boolean; is_within_spec?: boolean; parameter_id: string; parameter_type?: string }>).map((r) => (
-              <Card key={r.parameter_id} className={r.is_flagged ? "border-red-500/30" : ""}>
-                <CardContent className="p-3">
-                  {r.parameter_type === "photo" ? (
-                    <div>
-                      <p className="text-sm font-medium mb-2">{r.parameter_name}</p>
-                      {r.value
-                        // eslint-disable-next-line @next/next/no-img-element
-                        ? <img src={r.value} alt={r.parameter_name} className="rounded-md max-h-48 object-contain border border-border" />
-                        : <p className="text-xs text-muted-foreground">No photo captured</p>
-                      }
-                    </div>
-                  ) : (
-                    <div className="flex items-center justify-between">
+            {((inspection.results || []) as Array<{ parameter_name: string; unit?: string; value: string; is_flagged: boolean; is_within_spec?: boolean; parameter_id: string; parameter_type?: string }>).map((r) => {
+              // Detect multi-reading (JSON array of numbers)
+              let readingsArr: number[] | null = null;
+              try {
+                const parsed = JSON.parse(r.value);
+                if (Array.isArray(parsed) && parsed.every((v: unknown) => typeof v === "number")) readingsArr = parsed;
+              } catch { /* not JSON */ }
+              const readingsAvg = readingsArr ? readingsArr.reduce((a, b) => a + b, 0) / readingsArr.length : null;
+
+              return (
+                <Card key={r.parameter_id} className={r.is_flagged ? "border-red-500/30" : ""}>
+                  <CardContent className="p-3">
+                    {r.parameter_type === "photo" ? (
                       <div>
-                        <p className="text-sm font-medium">{r.parameter_name}</p>
-                        <p className="text-base font-mono">{r.value} {r.unit || ""}</p>
+                        <p className="text-sm font-medium mb-2">{r.parameter_name}</p>
+                        {r.value
+                          // eslint-disable-next-line @next/next/no-img-element
+                          ? <img src={r.value} alt={r.parameter_name} className="rounded-md max-h-48 object-contain border border-border" />
+                          : <p className="text-xs text-muted-foreground">No photo captured</p>
+                        }
                       </div>
-                      <Badge className={`text-xs ${r.is_flagged ? "bg-red-500/20 text-red-400" : "bg-green-500/20 text-green-400"}`}>
-                        {r.is_flagged ? "OUT OF SPEC" : "OK"}
-                      </Badge>
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
-            ))}
+                    ) : readingsArr ? (
+                      <div className="flex items-start justify-between gap-2">
+                        <div>
+                          <p className="text-sm font-medium">{r.parameter_name}</p>
+                          <p className="text-xs text-muted-foreground mt-0.5">
+                            {readingsArr.map((v, i) => `R${i + 1}: ${v}`).join(" · ")}
+                          </p>
+                          <p className="text-base font-mono mt-0.5">avg: {readingsAvg!.toFixed(4).replace(/\.?0+$/, "")} {r.unit || ""}</p>
+                        </div>
+                        <Badge className={`text-xs shrink-0 ${r.is_flagged ? "bg-red-500/20 text-red-400" : "bg-green-500/20 text-green-400"}`}>
+                          {r.is_flagged ? "OUT OF SPEC" : "OK"}
+                        </Badge>
+                      </div>
+                    ) : (
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <p className="text-sm font-medium">{r.parameter_name}</p>
+                          <p className="text-base font-mono">{r.value} {r.unit || ""}</p>
+                        </div>
+                        <Badge className={`text-xs ${r.is_flagged ? "bg-red-500/20 text-red-400" : "bg-green-500/20 text-green-400"}`}>
+                          {r.is_flagged ? "OUT OF SPEC" : "OK"}
+                        </Badge>
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              );
+            })}
 
             {!!inspection.review_notes && (
               <Card className="border-border/50">

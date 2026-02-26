@@ -41,7 +41,7 @@ export default function ConfigPage() {
   const [mtForm, setMtForm] = useState({ name: "", code: "", description: "" });
   const [paramForm, setParamForm] = useState({ name: "", code: "", parameterType: "numeric", unit: "", description: "", formula: "" });
   const [tplForm, setTplForm] = useState({ name: "", materialTypeId: "" });
-  const [tplItems, setTplItems] = useState<Array<{ parameterId: string; minValue: string; maxValue: string; isRequired: boolean; instructions: string }>>([]);
+  const [tplItems, setTplItems] = useState<Array<{ parameterId: string; minValue: string; maxValue: string; isRequired: boolean; instructions: string; readingCount: number }>>([]);
 
   const refresh = async () => {
     const [mt, p, t] = await Promise.all([
@@ -149,7 +149,7 @@ export default function ConfigPage() {
   };
 
   const addTplItem = () => {
-    setTplItems(prev => [...prev, { parameterId: "", minValue: "", maxValue: "", isRequired: true, instructions: "" }]);
+    setTplItems(prev => [...prev, { parameterId: "", minValue: "", maxValue: "", isRequired: true, instructions: "", readingCount: 1 }]);
   };
 
   const saveTemplate = async () => {
@@ -161,6 +161,7 @@ export default function ConfigPage() {
       maxValue: i.maxValue ? parseFloat(i.maxValue) : undefined,
       isRequired: i.isRequired,
       instructions: i.instructions || undefined,
+      readingCount: i.readingCount > 1 ? i.readingCount : undefined,
     }));
     await fetch("/api/qms/templates", {
       method: "POST",
@@ -473,6 +474,18 @@ export default function ConfigPage() {
                         <div><Label className="text-xs">Max</Label>
                           <Input type="number" value={item.maxValue} onChange={e => setTplItems(prev => prev.map((it, j) => j === i ? { ...it, maxValue: e.target.value } : it))} className="h-7 text-xs mt-0.5" /></div>
                       </div>
+                      {["numeric", "percentage", "visual_rating"].includes(parameters.find(p => p.id === item.parameterId)?.parameter_type ?? "") && (
+                        <div className="flex items-center gap-2">
+                          <Label className="text-xs text-muted-foreground shrink-0"># Readings</Label>
+                          <Input
+                            type="number" min="1" max="10"
+                            value={item.readingCount}
+                            onChange={e => setTplItems(prev => prev.map((it, j) => j === i ? { ...it, readingCount: Math.max(1, Math.min(10, parseInt(e.target.value) || 1)) } : it))}
+                            className="h-7 text-xs w-20"
+                          />
+                          {item.readingCount > 1 && <span className="text-xs text-blue-400">avg will be checked against spec</span>}
+                        </div>
+                      )}
                       <div className="flex items-center justify-between">
                         <label className="flex items-center gap-1 text-xs cursor-pointer">
                           <input type="checkbox" checked={item.isRequired} onChange={e => setTplItems(prev => prev.map((it, j) => j === i ? { ...it, isRequired: e.target.checked } : it))} />
