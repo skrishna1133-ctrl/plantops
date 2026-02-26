@@ -31,6 +31,7 @@ export async function initQmsTables() {
     description TEXT,
     created_at VARCHAR(50) NOT NULL
   )`;
+  await sql`ALTER TABLE qms_parameters ADD COLUMN IF NOT EXISTS formula TEXT`;
 
   // Inspection Templates
   await sql`CREATE TABLE IF NOT EXISTS qms_templates (
@@ -281,11 +282,12 @@ export const dbQmsParameters = {
     parameterType: string;
     unit?: string;
     description?: string;
+    formula?: string;
     createdAt: string;
   }) {
     await sql`
-      INSERT INTO qms_parameters (id, tenant_id, name, code, parameter_type, unit, description, created_at)
-      VALUES (${data.id}, ${data.tenantId}, ${data.name}, ${data.code}, ${data.parameterType}, ${data.unit ?? null}, ${data.description ?? null}, ${data.createdAt})
+      INSERT INTO qms_parameters (id, tenant_id, name, code, parameter_type, unit, description, formula, created_at)
+      VALUES (${data.id}, ${data.tenantId}, ${data.name}, ${data.code}, ${data.parameterType}, ${data.unit ?? null}, ${data.description ?? null}, ${data.formula ?? null}, ${data.createdAt})
     `;
   },
 
@@ -327,7 +329,7 @@ export const dbQmsTemplates = {
 
     const items = await sql`
       SELECT ti.*, p.name AS parameter_name, p.code AS parameter_code,
-             p.parameter_type, p.unit
+             p.parameter_type, p.unit, p.formula
       FROM qms_template_items ti
       JOIN qms_parameters p ON p.id = ti.parameter_id
       WHERE ti.template_id = ${id}
@@ -516,7 +518,7 @@ export const dbQmsInspections = {
     const insp = r.rows[0];
 
     const results = await sql`
-      SELECT ir.*, p.name AS parameter_name, p.code AS parameter_code, p.parameter_type, p.unit
+      SELECT ir.*, p.name AS parameter_name, p.code AS parameter_code, p.parameter_type, p.unit, p.formula
       FROM qms_inspection_results ir
       JOIN qms_parameters p ON p.id = ir.parameter_id
       WHERE ir.inspection_id = ${id}

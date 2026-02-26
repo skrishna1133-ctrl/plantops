@@ -21,6 +21,8 @@ interface TemplateItem {
   max_value?: number;
   is_required: boolean;
   instructions?: string;
+  formula?: string;
+  parameter_code?: string;
 }
 
 interface ResultEntry {
@@ -276,6 +278,11 @@ export default function InspectionPage({ params }: { params: Promise<{ id: strin
                           // eslint-disable-next-line @next/next/no-img-element
                           <img src={current} alt="Inspection photo" className="rounded-md max-h-48 object-contain border border-border" />
                         )}
+                      </div>
+                    ) : item.parameter_type === "calculated" ? (
+                      <div className="rounded-md border border-dashed border-border bg-muted/30 px-3 py-2 text-sm text-muted-foreground">
+                        Auto-calculated on submit
+                        {item.formula && <span className="ml-2 font-mono text-xs text-blue-400">({item.formula})</span>}
                       </div>
                     ) : (
                       <Input

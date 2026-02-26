@@ -21,19 +21,23 @@ export async function POST(request: NextRequest) {
   await initDb();
 
   const body = await request.json();
-  const { name, code, parameterType, unit, description } = body;
+  const { name, code, parameterType, unit, description, formula } = body;
   if (!name || !code || !parameterType) {
     return NextResponse.json({ error: "name, code, and parameterType are required" }, { status: 400 });
   }
 
-  const validTypes = ["numeric", "percentage", "pass_fail", "text", "visual_rating"];
+  const validTypes = ["numeric", "percentage", "pass_fail", "text", "visual_rating", "photo", "calculated"];
   if (!validTypes.includes(parameterType)) {
     return NextResponse.json({ error: "Invalid parameterType" }, { status: 400 });
   }
 
+  if (parameterType === "calculated" && !formula) {
+    return NextResponse.json({ error: "formula is required for calculated parameters" }, { status: 400 });
+  }
+
   const id = crypto.randomUUID();
   const now = new Date().toISOString();
-  await dbQmsParameters.create({ id, tenantId: auth.payload.tenantId!, name, code, parameterType, unit, description, createdAt: now });
+  await dbQmsParameters.create({ id, tenantId: auth.payload.tenantId!, name, code, parameterType, unit, description, formula, createdAt: now });
 
   logActivity({ tenantId: auth.payload.tenantId!, userId: auth.payload.userId, role: auth.payload.role,
     action: "created", entityType: "qms_parameter", entityId: id, entityName: name }).catch(() => {});

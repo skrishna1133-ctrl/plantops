@@ -13,10 +13,10 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
 
-const PARAM_TYPES = ["numeric", "percentage", "pass_fail", "text", "visual_rating", "photo"];
+const PARAM_TYPES = ["numeric", "percentage", "pass_fail", "text", "visual_rating", "photo", "calculated"];
 
 interface MaterialType { id: string; name: string; code: string; description?: string }
-interface Parameter { id: string; name: string; code: string; parameter_type: string; unit?: string }
+interface Parameter { id: string; name: string; code: string; parameter_type: string; unit?: string; formula?: string }
 interface Template { id: string; name: string; material_type_name?: string; revision_number: number }
 
 export default function ConfigPage() {
@@ -34,7 +34,7 @@ export default function ConfigPage() {
 
   // Forms
   const [mtForm, setMtForm] = useState({ name: "", code: "", description: "" });
-  const [paramForm, setParamForm] = useState({ name: "", code: "", parameterType: "numeric", unit: "", description: "" });
+  const [paramForm, setParamForm] = useState({ name: "", code: "", parameterType: "numeric", unit: "", description: "", formula: "" });
   const [tplForm, setTplForm] = useState({ name: "", materialTypeId: "" });
   const [tplItems, setTplItems] = useState<Array<{ parameterId: string; minValue: string; maxValue: string; isRequired: boolean; instructions: string }>>([]);
 
@@ -82,7 +82,7 @@ export default function ConfigPage() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(paramForm),
     });
-    setParamForm({ name: "", code: "", parameterType: "numeric", unit: "", description: "" });
+    setParamForm({ name: "", code: "", parameterType: "numeric", unit: "", description: "", formula: "" });
     setNewParamOpen(false);
     await refresh();
     setSaving(false);
@@ -182,6 +182,7 @@ export default function ConfigPage() {
                     <div className="flex-1">
                       <p className="font-medium text-sm">{p.name}</p>
                       <p className="text-xs text-muted-foreground">{p.parameter_type}{p.unit ? ` · ${p.unit}` : ""}</p>
+                      {p.formula && <p className="text-xs font-mono text-blue-400 mt-0.5">= {p.formula}</p>}
                     </div>
                   </CardContent>
                 </Card>
@@ -244,24 +245,53 @@ export default function ConfigPage() {
 
       {/* New Parameter Dialog */}
       <Dialog open={newParamOpen} onOpenChange={setNewParamOpen}>
-        <DialogContent className="max-w-sm">
+        <DialogContent className="max-w-md">
           <DialogHeader><DialogTitle>New Parameter</DialogTitle></DialogHeader>
           <div className="space-y-3">
             <div><Label>Name <span className="text-red-400">*</span></Label>
               <Input value={paramForm.name} onChange={e => setParamForm(f => ({ ...f, name: e.target.value }))} className="mt-1" /></div>
             <div><Label>Code <span className="text-red-400">*</span></Label>
-              <Input value={paramForm.code} onChange={e => setParamForm(f => ({ ...f, code: e.target.value.toLowerCase().replace(/\s+/g, "_") }))} className="mt-1 font-mono" /></div>
+              <Input value={paramForm.code} onChange={e => setParamForm(f => ({ ...f, code: e.target.value.toLowerCase().replace(/\s+/g, "_") }))} className="mt-1 font-mono" placeholder="e.g. bulk_density_gcc" /></div>
             <div><Label>Type</Label>
-              <select value={paramForm.parameterType} onChange={e => setParamForm(f => ({ ...f, parameterType: e.target.value }))}
+              <select value={paramForm.parameterType} onChange={e => setParamForm(f => ({ ...f, parameterType: e.target.value, formula: "" }))}
                 className="w-full border border-input bg-background text-sm rounded-md px-3 py-2 mt-1">
                 {PARAM_TYPES.map(t => <option key={t} value={t}>{t.replace(/_/g, " ")}</option>)}
               </select></div>
-            <div><Label>Unit</Label>
-              <Input value={paramForm.unit} onChange={e => setParamForm(f => ({ ...f, unit: e.target.value }))} className="mt-1" placeholder="g/cc, %, kg..." /></div>
+            {paramForm.parameterType === "calculated" ? (
+              <div>
+                <Label>Formula <span className="text-red-400">*</span></Label>
+                <Input
+                  value={paramForm.formula}
+                  onChange={e => setParamForm(f => ({ ...f, formula: e.target.value }))}
+                  className="mt-1 font-mono"
+                  placeholder="e.g. bulk_density_gcc * 62.428"
+                />
+                {parameters.length > 0 && (
+                  <div className="mt-2 p-2 rounded bg-muted/40 text-xs">
+                    <p className="font-medium mb-1 text-muted-foreground">Available parameter codes:</p>
+                    <div className="flex flex-wrap gap-1">
+                      {parameters.filter(p => p.parameter_type !== "calculated" && p.parameter_type !== "photo" && p.parameter_type !== "pass_fail" && p.parameter_type !== "text").map(p => (
+                        <code key={p.id} className="bg-background border border-border rounded px-1 py-0.5 text-xs cursor-pointer hover:bg-muted"
+                          onClick={() => setParamForm(f => ({ ...f, formula: f.formula + p.code }))}>
+                          {p.code}
+                        </code>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div><Label>Unit</Label>
+                <Input value={paramForm.unit} onChange={e => setParamForm(f => ({ ...f, unit: e.target.value }))} className="mt-1" placeholder="g/cc, %, kg..." /></div>
+            )}
+            {paramForm.parameterType === "calculated" && (
+              <div><Label>Unit (display only)</Label>
+                <Input value={paramForm.unit} onChange={e => setParamForm(f => ({ ...f, unit: e.target.value }))} className="mt-1" placeholder="e.g. lb/ft³" /></div>
+            )}
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setNewParamOpen(false)}>Cancel</Button>
-            <Button onClick={saveParameter} disabled={!paramForm.name || !paramForm.code || saving}>
+            <Button onClick={saveParameter} disabled={!paramForm.name || !paramForm.code || (paramForm.parameterType === "calculated" && !paramForm.formula) || saving}>
               {saving ? <Loader2 size={14} className="animate-spin mr-1" /> : null} Save
             </Button>
           </DialogFooter>
