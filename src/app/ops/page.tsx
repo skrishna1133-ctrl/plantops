@@ -4,9 +4,9 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
-  Loader2, LogOut, Factory, Truck, Package, BarChart3,
-  Settings, ChevronRight, Plus, ArrowLeft,
-  TrendingUp, ClipboardList, ArrowDownToLine, ArrowUpFromLine,
+  Loader2, LogOut, Factory, Truck, Package,
+  Settings, ChevronRight, ArrowLeft,
+  ClipboardList, ArrowDownToLine, ArrowUpFromLine,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -291,17 +291,6 @@ export default function OpsPage() {
           </Card>
         </div>
 
-        {/* Create Job CTA for managers */}
-        {canManage && (
-          <div className="flex justify-center pt-2">
-            <Link href="/ops/jobs/new">
-              <Button size="lg" className="gap-2">
-                <Plus size={18} />
-                Create New Job
-              </Button>
-            </Link>
-          </div>
-        )}
       </main>
     </div>
   );
