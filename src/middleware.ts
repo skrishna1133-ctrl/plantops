@@ -10,8 +10,9 @@ const routeRoles: Record<string, UserRole[]> = {
   "/shipments": ["shipping", "admin", "owner", "super_admin"],
   "/checklists": ["worker", "admin", "owner", "super_admin"],
   "/quality": ["worker", "quality_tech", "quality_manager", "admin", "owner", "super_admin"],
-  "/documents": ["worker", "quality_tech", "engineer", "shipping", "admin", "owner", "super_admin", "maintenance_manager", "maintenance_tech"],
+  "/documents": ["worker", "quality_tech", "engineer", "shipping", "receiving", "admin", "owner", "super_admin", "maintenance_manager", "maintenance_tech"],
   "/maintenance": ["worker", "maintenance_tech", "maintenance_manager", "engineer", "admin", "owner", "super_admin"],
+  "/ops": ["worker", "receiving", "shipping", "quality_tech", "quality_manager", "engineer", "admin", "owner", "super_admin"],
 };
 
 export async function middleware(request: NextRequest) {
@@ -51,6 +52,7 @@ export async function middleware(request: NextRequest) {
       super_admin: "/platform",
       maintenance_manager: "/maintenance",
       maintenance_tech: "/maintenance",
+      receiving: "/ops",
     };
     const target = redirectMap[payload.role] || "/";
     return NextResponse.redirect(new URL(target, request.url));
@@ -60,5 +62,5 @@ export async function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/platform/:path*", "/admin/:path*", "/lab/:path*", "/view/:path*", "/shipments/:path*", "/checklists/:path*", "/quality/:path*", "/documents/:path*", "/maintenance/:path*"],
+  matcher: ["/platform/:path*", "/admin/:path*", "/lab/:path*", "/view/:path*", "/shipments/:path*", "/checklists/:path*", "/quality/:path*", "/documents/:path*", "/maintenance/:path*", "/ops/:path*"],
 };

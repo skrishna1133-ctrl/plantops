@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { AlertTriangle, Wrench, ClipboardCheck, Package, Clock, FileText, Shield, FileCheck, LogIn, LogOut, Eye, Loader2, Globe } from "lucide-react";
+import { AlertTriangle, Wrench, ClipboardCheck, Package, Clock, FileText, Shield, FileCheck, LogIn, LogOut, Eye, Loader2, Globe, Factory } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import IncidentReportDialog from "@/components/incident-report-dialog";
@@ -50,6 +50,16 @@ const tools = [
     bgColor: "bg-purple-500/10 hover:bg-purple-500/20",
     available: true,
     requiredRoles: ["worker", "quality_tech", "quality_manager", "admin", "owner"] as UserRole[],
+  },
+  {
+    id: "ops",
+    name: "Operations",
+    description: "Jobs, inbound/outbound shipments, production runs, lot tracking",
+    icon: Factory,
+    color: "text-orange-500",
+    bgColor: "bg-orange-500/10 hover:bg-orange-500/20",
+    available: true,
+    requiredRoles: ["receiving", "shipping", "quality_tech", "quality_manager", "engineer", "admin", "owner"] as UserRole[],
   },
   {
     id: "shipments",
@@ -104,6 +114,7 @@ const roleDashboards: Record<string, { href: string; label: string; icon: typeof
   worker: { href: "/quality", label: "Quality", icon: FileCheck },
   maintenance_manager: { href: "/maintenance", label: "Maintenance", icon: Wrench },
   maintenance_tech: { href: "/maintenance", label: "Maintenance", icon: Wrench },
+  receiving: { href: "/ops", label: "Operations", icon: Factory },
 };
 
 export default function Home() {
@@ -175,6 +186,8 @@ export default function Home() {
       router.push("/documents");
     } else if (toolId === "maintenance") {
       router.push("/maintenance");
+    } else if (toolId === "ops") {
+      router.push("/ops");
     }
   };
 
