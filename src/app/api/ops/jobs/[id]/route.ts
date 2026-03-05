@@ -10,16 +10,21 @@ const ALL_OPS = ["owner", "admin", "engineer", "shipping", "receiving", "quality
 const VALID_STATUSES = ["open", "in_progress", "on_hold", "completed", "cancelled"] as const;
 
 export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const auth = await requireAuth(request, [...ALL_OPS]);
-  if (!auth.ok) return auth.response;
-  await initDb();
+  try {
+    const auth = await requireAuth(request, [...ALL_OPS]);
+    if (!auth.ok) return auth.response;
+    await initDb();
 
-  const { id } = await params;
-  const job = await dbOpsJobs.getById(id, auth.payload.tenantId!);
-  if (!job) return NextResponse.json({ error: "Job not found" }, { status: 404 });
+    const { id } = await params;
+    const job = await dbOpsJobs.getById(id, auth.payload.tenantId!);
+    if (!job) return NextResponse.json({ error: "Job not found" }, { status: 404 });
 
-  const history = await dbOpsJobs.getStatusHistory(id);
-  return NextResponse.json({ ...job, statusHistory: history });
+    const history = await dbOpsJobs.getStatusHistory(id);
+    return NextResponse.json({ ...job, statusHistory: history });
+  } catch (err) {
+    console.error("GET /api/ops/jobs/[id]:", err);
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
+  }
 }
 
 export async function PATCH(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {

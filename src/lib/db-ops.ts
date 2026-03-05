@@ -716,7 +716,7 @@ export const dbOpsJobs = {
     const r = await sql`
       SELECT h.*, u.full_name AS changed_by_name
       FROM ops_job_status_history h
-      LEFT JOIN users u ON u.id = h.changed_by_id
+      LEFT JOIN users u ON u.id::text = h.changed_by_id
       WHERE h.job_id = ${jobId}
       ORDER BY h.changed_at ASC
     `;

@@ -164,18 +164,18 @@ export default function JobDetailPage({ params }: { params: Promise<{ id: string
 
   const refresh = async () => {
     const [j, ib, l, r, ob, c, v, cu, loc, mt, pt, pl] = await Promise.all([
-      fetch(`/api/ops/jobs/${id}`).then(r => r.json()).catch(() => null),
-      fetch(`/api/ops/inbound-shipments?jobId=${id}`).then(r => r.json()).catch(() => []),
-      fetch(`/api/ops/lots?jobId=${id}`).then(r => r.json()).catch(() => []),
-      fetch(`/api/ops/production-runs?jobId=${id}`).then(r => r.json()).catch(() => []),
-      fetch(`/api/ops/outbound-shipments?jobId=${id}`).then(r => r.json()).catch(() => []),
-      fetch("/api/ops/carriers").then(r => r.json()).catch(() => []),
-      fetch("/api/ops/vendors").then(r => r.json()).catch(() => []),
-      fetch("/api/ops/customers").then(r => r.json()).catch(() => []),
-      fetch("/api/ops/locations").then(r => r.json()).catch(() => []),
-      fetch("/api/qms/material-types").then(r => r.json()).catch(() => []),
-      fetch("/api/ops/processing-types").then(r => r.json()).catch(() => []),
-      fetch("/api/maintenance/lines").then(r => r.json()).catch(() => []),
+      fetch(`/api/ops/jobs/${id}`).then(r => r.ok ? r.json() : null).catch(() => null),
+      fetch(`/api/ops/inbound-shipments?jobId=${id}`).then(r => r.ok ? r.json() : []).catch(() => []),
+      fetch(`/api/ops/lots?jobId=${id}`).then(r => r.ok ? r.json() : []).catch(() => []),
+      fetch(`/api/ops/production-runs?jobId=${id}`).then(r => r.ok ? r.json() : []).catch(() => []),
+      fetch(`/api/ops/outbound-shipments?jobId=${id}`).then(r => r.ok ? r.json() : []).catch(() => []),
+      fetch("/api/ops/carriers").then(r => r.ok ? r.json() : []).catch(() => []),
+      fetch("/api/ops/vendors").then(r => r.ok ? r.json() : []).catch(() => []),
+      fetch("/api/ops/customers").then(r => r.ok ? r.json() : []).catch(() => []),
+      fetch("/api/ops/locations").then(r => r.ok ? r.json() : []).catch(() => []),
+      fetch("/api/qms/material-types").then(r => r.ok ? r.json() : []).catch(() => []),
+      fetch("/api/ops/processing-types").then(r => r.ok ? r.json() : []).catch(() => []),
+      fetch("/api/maintenance/lines").then(r => r.ok ? r.json() : []).catch(() => []),
     ]);
     setJob(j);
     setInboundShipments(Array.isArray(ib) ? ib : []);
