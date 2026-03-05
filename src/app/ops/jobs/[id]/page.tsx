@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
   ArrowLeft, Loader2, Plus, Truck, Package, Factory, ChevronRight,
-  Pencil, Check, X, Scale
+  Pencil, Check, Scale, ArrowUpFromLine, Play, Square, TrendingUp
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -16,6 +16,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
 
+// ─── Types ───────────────────────────────────────────────────────────────────
+
 interface Job {
   id: string; job_number: string; job_type: string; status: string;
   customer_name?: string; vendor_name?: string; material_type_name?: string;
@@ -24,24 +26,20 @@ interface Job {
   target_weight?: number; target_weight_unit?: string;
   description?: string; notes?: string;
   expected_start_date?: string; expected_end_date?: string;
-  actual_start_date?: string; actual_end_date?: string;
   created_at: string; updated_at: string;
-  statusHistory?: Array<{ to_status: string; changed_by_name?: string; changed_at: string; notes?: string }>;
 }
 
 interface InboundShipment {
   id: string; shipment_number: string; status: string;
-  vendor_name?: string; carrier_name?: string; carrier_name_resolved?: string;
-  driver_name?: string; truck_number?: string;
+  carrier_name_resolved?: string; driver_name?: string; truck_number?: string;
   scheduled_date?: string; received_date?: string;
   total_weight?: number; weight_unit?: string; entry_count?: number;
-  location_name?: string;
 }
 
 interface WeightEntry {
   id: string; entry_number: number; gross_weight: number;
   tare_weight?: number; net_weight?: number; weight_unit: string;
-  container_label?: string; notes?: string; entered_by_name?: string; entered_at: string;
+  container_label?: string;
 }
 
 interface Lot {
@@ -50,12 +48,34 @@ interface Lot {
   created_at: string;
 }
 
+interface ProductionRun {
+  id: string; run_number: string; status: string;
+  production_line_id?: string; processing_type_name?: string;
+  operator_name?: string; supervisor_name?: string;
+  scheduled_start?: string; actual_start?: string; actual_end?: string;
+  input_weight?: number; input_weight_unit?: string;
+  output_weight?: number; output_weight_unit?: string;
+  yield_percentage?: number; notes?: string;
+}
+
+interface OutboundShipment {
+  id: string; shipment_number: string; status: string;
+  customer_name_resolved?: string; carrier_name_resolved?: string;
+  driver_name?: string; truck_number?: string; bol_number?: string;
+  scheduled_date?: string; shipped_date?: string;
+  total_weight?: number; total_weight_unit?: string;
+}
+
 interface Carrier { id: string; name: string }
 interface Vendor { id: string; name: string }
+interface Customer { id: string; name: string }
 interface Location { id: string; name: string }
 interface MaterialType { id: string; name: string }
+interface ProcessingType { id: string; name: string }
+interface ProductionLine { id: string; line_id: string; name: string; is_active: boolean }
 
 const WEIGHT_UNITS = ["lbs", "kg", "tons"];
+const JOB_STATUSES = ["open", "in_progress", "on_hold", "completed", "cancelled"];
 
 const LOT_STATUS_COLORS: Record<string, string> = {
   pending: "bg-slate-500/10 text-slate-500",
@@ -74,7 +94,21 @@ const SHIP_STATUS_COLORS: Record<string, string> = {
   cancelled: "bg-red-500/10 text-red-400",
 };
 
-const JOB_STATUSES = ["open", "in_progress", "on_hold", "completed", "cancelled"];
+const RUN_STATUS_COLORS: Record<string, string> = {
+  scheduled: "bg-blue-500/10 text-blue-600",
+  in_progress: "bg-amber-500/10 text-amber-600",
+  completed: "bg-green-500/10 text-green-600",
+  cancelled: "bg-red-500/10 text-red-400",
+};
+
+const OUT_STATUS_COLORS: Record<string, string> = {
+  pending: "bg-slate-500/10 text-slate-500",
+  ready: "bg-blue-500/10 text-blue-600",
+  shipped: "bg-green-500/10 text-green-600",
+  cancelled: "bg-red-500/10 text-red-400",
+};
+
+// ─── Component ───────────────────────────────────────────────────────────────
 
 export default function JobDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
@@ -82,60 +116,79 @@ export default function JobDetailPage({ params }: { params: Promise<{ id: string
   const [role, setRole] = useState<string>("");
   const [loading, setLoading] = useState(true);
   const [job, setJob] = useState<Job | null>(null);
+
   const [inboundShipments, setInboundShipments] = useState<InboundShipment[]>([]);
   const [lots, setLots] = useState<Lot[]>([]);
+  const [runs, setRuns] = useState<ProductionRun[]>([]);
+  const [outbound, setOutbound] = useState<OutboundShipment[]>([]);
 
   // Master lists
   const [carriers, setCarriers] = useState<Carrier[]>([]);
   const [vendors, setVendors] = useState<Vendor[]>([]);
+  const [customers, setCustomers] = useState<Customer[]>([]);
   const [locations, setLocations] = useState<Location[]>([]);
   const [materialTypes, setMaterialTypes] = useState<MaterialType[]>([]);
+  const [processingTypes, setProcessingTypes] = useState<ProcessingType[]>([]);
+  const [productionLines, setProductionLines] = useState<ProductionLine[]>([]);
 
   // Dialogs
   const [statusDialogOpen, setStatusDialogOpen] = useState(false);
   const [newShipmentOpen, setNewShipmentOpen] = useState(false);
+  const [newLotOpen, setNewLotOpen] = useState(false);
+  const [newRunOpen, setNewRunOpen] = useState(false);
+  const [runDetailOpen, setRunDetailOpen] = useState(false);
+  const [selectedRun, setSelectedRun] = useState<ProductionRun | null>(null);
+  const [newOutboundOpen, setNewOutboundOpen] = useState(false);
+  const [outboundDetailOpen, setOutboundDetailOpen] = useState(false);
+  const [selectedOutbound, setSelectedOutbound] = useState<OutboundShipment & { lots?: Array<{ lot_id: string; lot_number: string; weight?: number; weight_unit?: string; lot_status?: string }> } | null>(null);
   const [shipmentDetailOpen, setShipmentDetailOpen] = useState(false);
   const [selectedShipment, setSelectedShipment] = useState<InboundShipment | null>(null);
   const [shipmentWeights, setShipmentWeights] = useState<WeightEntry[]>([]);
-  const [newLotOpen, setNewLotOpen] = useState(false);
-  const [saving, setSaving] = useState(false);
 
+  const [saving, setSaving] = useState(false);
   const [newStatus, setNewStatus] = useState("");
   const [statusNote, setStatusNote] = useState("");
 
-  const [shipForm, setShipForm] = useState({
-    vendorId: "", carrierId: "", carrierName: "", driverName: "",
-    truckNumber: "", trailerNumber: "", scheduledDate: "", locationId: "", notes: "",
-  });
-
-  const [weightForm, setWeightForm] = useState({
-    grossWeight: "", tareWeight: "", weightUnit: "lbs", containerLabel: "", notes: "",
-  });
-
-  const [lotForm, setLotForm] = useState({
-    materialTypeId: "", inboundWeight: "", inboundWeightUnit: "lbs", locationId: "", notes: "",
-  });
+  // Forms
+  const [shipForm, setShipForm] = useState({ vendorId: "", carrierId: "", driverName: "", truckNumber: "", trailerNumber: "", scheduledDate: "", locationId: "", notes: "" });
+  const [weightForm, setWeightForm] = useState({ grossWeight: "", tareWeight: "", weightUnit: "lbs", containerLabel: "", notes: "" });
+  const [lotForm, setLotForm] = useState({ materialTypeId: "", inboundWeight: "", inboundWeightUnit: "lbs", locationId: "", notes: "" });
+  const [runForm, setRunForm] = useState({ productionLineId: "", processingTypeId: "", operatorId: "", scheduledStart: "", inputWeight: "", inputWeightUnit: "lbs", notes: "" });
+  const [runEditForm, setRunEditForm] = useState({ outputWeight: "", outputWeightUnit: "lbs", notes: "" });
+  const [outboundForm, setOutboundForm] = useState({ customerId: "", carrierId: "", carrierName: "", driverName: "", truckNumber: "", trailerNumber: "", customerPoNumber: "", bolNumber: "", scheduledDate: "", notes: "" });
+  const [addLotToOutbound, setAddLotToOutbound] = useState({ lotId: "", weight: "", weightUnit: "lbs" });
 
   const canManage = ["owner", "admin", "engineer"].includes(role);
   const canReceive = ["owner", "admin", "engineer", "receiving", "shipping"].includes(role);
+  const canShip = ["owner", "admin", "engineer", "shipping"].includes(role);
 
   const refresh = async () => {
-    const [j, ib, l, c, v, loc, mt] = await Promise.all([
+    const [j, ib, l, r, ob, c, v, cu, loc, mt, pt, pl] = await Promise.all([
       fetch(`/api/ops/jobs/${id}`).then(r => r.json()).catch(() => null),
       fetch(`/api/ops/inbound-shipments?jobId=${id}`).then(r => r.json()).catch(() => []),
       fetch(`/api/ops/lots?jobId=${id}`).then(r => r.json()).catch(() => []),
+      fetch(`/api/ops/production-runs?jobId=${id}`).then(r => r.json()).catch(() => []),
+      fetch(`/api/ops/outbound-shipments?jobId=${id}`).then(r => r.json()).catch(() => []),
       fetch("/api/ops/carriers").then(r => r.json()).catch(() => []),
       fetch("/api/ops/vendors").then(r => r.json()).catch(() => []),
+      fetch("/api/ops/customers").then(r => r.json()).catch(() => []),
       fetch("/api/ops/locations").then(r => r.json()).catch(() => []),
       fetch("/api/qms/material-types").then(r => r.json()).catch(() => []),
+      fetch("/api/ops/processing-types").then(r => r.json()).catch(() => []),
+      fetch("/api/maintenance/lines").then(r => r.json()).catch(() => []),
     ]);
     setJob(j);
     setInboundShipments(Array.isArray(ib) ? ib : []);
     setLots(Array.isArray(l) ? l : []);
+    setRuns(Array.isArray(r) ? r : []);
+    setOutbound(Array.isArray(ob) ? ob : []);
     setCarriers(Array.isArray(c) ? c : []);
     setVendors(Array.isArray(v) ? v : []);
+    setCustomers(Array.isArray(cu) ? cu : []);
     setLocations(Array.isArray(loc) ? loc : []);
     setMaterialTypes(Array.isArray(mt) ? mt : []);
+    setProcessingTypes(Array.isArray(pt) ? pt : []);
+    setProductionLines(Array.isArray(pl) ? pl.filter((x: ProductionLine) => x.is_active) : []);
   };
 
   useEffect(() => {
@@ -147,19 +200,15 @@ export default function JobDetailPage({ params }: { params: Promise<{ id: string
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // ── Status change ──────────────────────────────────────────────────────────
   const handleStatusChange = async () => {
     setSaving(true);
-    await fetch(`/api/ops/jobs/${id}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ status: newStatus, statusNotes: statusNote }),
-    });
-    setStatusDialogOpen(false);
-    setStatusNote("");
-    await refresh();
-    setSaving(false);
+    await fetch(`/api/ops/jobs/${id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ status: newStatus, statusNotes: statusNote }) });
+    setStatusDialogOpen(false); setStatusNote("");
+    await refresh(); setSaving(false);
   };
 
+  // ── Inbound ────────────────────────────────────────────────────────────────
   const handleCreateShipment = async () => {
     setSaving(true);
     const body = { jobId: id, ...shipForm, vendorId: shipForm.vendorId || undefined, carrierId: shipForm.carrierId || undefined, locationId: shipForm.locationId || undefined };
@@ -170,8 +219,8 @@ export default function JobDetailPage({ params }: { params: Promise<{ id: string
 
   const openShipmentDetail = async (shp: InboundShipment) => {
     setSelectedShipment(shp);
-    const entries = await fetch(`/api/ops/inbound-shipments/${shp.id}`).then(r => r.json()).catch(() => ({ weightEntries: [] }));
-    setShipmentWeights(entries.weightEntries ?? []);
+    const data = await fetch(`/api/ops/inbound-shipments/${shp.id}`).then(r => r.json()).catch(() => ({ weightEntries: [] }));
+    setShipmentWeights(data.weightEntries ?? []);
     setWeightForm({ grossWeight: "", tareWeight: "", weightUnit: "lbs", containerLabel: "", notes: "" });
     setShipmentDetailOpen(true);
   };
@@ -180,55 +229,118 @@ export default function JobDetailPage({ params }: { params: Promise<{ id: string
     if (!selectedShipment) return;
     setSaving(true);
     await fetch(`/api/ops/inbound-shipments/${selectedShipment.id}/weights`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        grossWeight: parseFloat(weightForm.grossWeight),
-        tareWeight: weightForm.tareWeight ? parseFloat(weightForm.tareWeight) : undefined,
-        weightUnit: weightForm.weightUnit,
-        containerLabel: weightForm.containerLabel || undefined,
-        notes: weightForm.notes || undefined,
-      }),
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ grossWeight: parseFloat(weightForm.grossWeight), tareWeight: weightForm.tareWeight ? parseFloat(weightForm.tareWeight) : undefined, weightUnit: weightForm.weightUnit, containerLabel: weightForm.containerLabel || undefined }),
     });
-    // Refresh weight list
-    const entries = await fetch(`/api/ops/inbound-shipments/${selectedShipment.id}`).then(r => r.json()).catch(() => ({ weightEntries: [] }));
-    setShipmentWeights(entries.weightEntries ?? []);
+    const data = await fetch(`/api/ops/inbound-shipments/${selectedShipment.id}`).then(r => r.json()).catch(() => ({ weightEntries: [] }));
+    setShipmentWeights(data.weightEntries ?? []);
     setWeightForm({ grossWeight: "", tareWeight: "", weightUnit: "lbs", containerLabel: "", notes: "" });
-    await refresh();
-    setSaving(false);
+    await refresh(); setSaving(false);
   };
 
   const handleMarkReceived = async () => {
     if (!selectedShipment) return;
-    await fetch(`/api/ops/inbound-shipments/${selectedShipment.id}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ status: "received", receivedDate: new Date().toISOString() }),
-    });
-    setShipmentDetailOpen(false);
-    await refresh();
+    await fetch(`/api/ops/inbound-shipments/${selectedShipment.id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ status: "received", receivedDate: new Date().toISOString() }) });
+    setShipmentDetailOpen(false); await refresh();
   };
 
+  // ── Lots ───────────────────────────────────────────────────────────────────
   const handleCreateLot = async () => {
     setSaving(true);
-    const body = {
-      jobId: id,
-      materialTypeId: lotForm.materialTypeId || undefined,
-      inboundWeight: lotForm.inboundWeight ? parseFloat(lotForm.inboundWeight) : undefined,
-      inboundWeightUnit: lotForm.inboundWeightUnit,
-      locationId: lotForm.locationId || undefined,
-      notes: lotForm.notes || undefined,
-    };
+    const body = { jobId: id, materialTypeId: lotForm.materialTypeId || undefined, inboundWeight: lotForm.inboundWeight ? parseFloat(lotForm.inboundWeight) : undefined, inboundWeightUnit: lotForm.inboundWeightUnit, locationId: lotForm.locationId || undefined, notes: lotForm.notes || undefined };
     const res = await fetch("/api/ops/lots", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
     if (res.ok) { setNewLotOpen(false); await refresh(); }
     setSaving(false);
   };
 
+  // ── Production Runs ────────────────────────────────────────────────────────
+  const handleCreateRun = async () => {
+    setSaving(true);
+    const body = { jobId: id, productionLineId: runForm.productionLineId || undefined, processingTypeId: runForm.processingTypeId || undefined, scheduledStart: runForm.scheduledStart || undefined, inputWeight: runForm.inputWeight ? parseFloat(runForm.inputWeight) : undefined, inputWeightUnit: runForm.inputWeightUnit, notes: runForm.notes || undefined };
+    const res = await fetch("/api/ops/production-runs", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+    if (res.ok) { setNewRunOpen(false); await refresh(); }
+    setSaving(false);
+  };
+
+  const openRunDetail = async (run: ProductionRun) => {
+    const data = await fetch(`/api/ops/production-runs/${run.id}`).then(r => r.json()).catch(() => run);
+    setSelectedRun(data);
+    setRunEditForm({ outputWeight: String(data.output_weight ?? ""), outputWeightUnit: data.output_weight_unit ?? "lbs", notes: data.notes ?? "" });
+    setRunDetailOpen(true);
+  };
+
+  const handleRunStatusChange = async (runId: string, status: string) => {
+    setSaving(true);
+    await fetch(`/api/ops/production-runs/${runId}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ status }) });
+    await refresh();
+    if (selectedRun) {
+      const data = await fetch(`/api/ops/production-runs/${runId}`).then(r => r.json()).catch(() => selectedRun);
+      setSelectedRun(data);
+    }
+    setSaving(false);
+  };
+
+  const handleSaveRunOutput = async () => {
+    if (!selectedRun) return;
+    setSaving(true);
+    const res = await fetch(`/api/ops/production-runs/${selectedRun.id}`, {
+      method: "PATCH", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ outputWeight: parseFloat(runEditForm.outputWeight), outputWeightUnit: runEditForm.outputWeightUnit, notes: runEditForm.notes || undefined }),
+    });
+    const data = await res.json();
+    await refresh();
+    const updated = await fetch(`/api/ops/production-runs/${selectedRun.id}`).then(r => r.json()).catch(() => selectedRun);
+    setSelectedRun(updated);
+    setSaving(false);
+  };
+
+  // ── Outbound ───────────────────────────────────────────────────────────────
+  const handleCreateOutbound = async () => {
+    setSaving(true);
+    const body = { jobId: id, customerId: outboundForm.customerId || undefined, carrierId: outboundForm.carrierId || undefined, carrierName: outboundForm.carrierName || undefined, driverName: outboundForm.driverName || undefined, truckNumber: outboundForm.truckNumber || undefined, trailerNumber: outboundForm.trailerNumber || undefined, customerPoNumber: outboundForm.customerPoNumber || undefined, bolNumber: outboundForm.bolNumber || undefined, scheduledDate: outboundForm.scheduledDate || undefined, notes: outboundForm.notes || undefined };
+    const res = await fetch("/api/ops/outbound-shipments", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+    if (res.ok) { setNewOutboundOpen(false); await refresh(); }
+    setSaving(false);
+  };
+
+  const openOutboundDetail = async (shp: OutboundShipment) => {
+    const data = await fetch(`/api/ops/outbound-shipments/${shp.id}`).then(r => r.json()).catch(() => ({ ...shp, lots: [] }));
+    setSelectedOutbound(data);
+    setAddLotToOutbound({ lotId: "", weight: "", weightUnit: "lbs" });
+    setOutboundDetailOpen(true);
+  };
+
+  const handleAddLotToOutbound = async () => {
+    if (!selectedOutbound || !addLotToOutbound.lotId) return;
+    setSaving(true);
+    await fetch(`/api/ops/outbound-shipments/${selectedOutbound.id}/lots`, {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ lotId: addLotToOutbound.lotId, weight: addLotToOutbound.weight ? parseFloat(addLotToOutbound.weight) : undefined, weightUnit: addLotToOutbound.weightUnit }),
+    });
+    const data = await fetch(`/api/ops/outbound-shipments/${selectedOutbound.id}`).then(r => r.json()).catch(() => selectedOutbound);
+    setSelectedOutbound(data);
+    setAddLotToOutbound({ lotId: "", weight: "", weightUnit: "lbs" });
+    await refresh(); setSaving(false);
+  };
+
+  const handleMarkShipped = async () => {
+    if (!selectedOutbound) return;
+    await fetch(`/api/ops/outbound-shipments/${selectedOutbound.id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ status: "shipped" }) });
+    setOutboundDetailOpen(false); await refresh();
+  };
+
+  // ─────────────────────────────────────────────────────────────────────────
+
   if (loading) return <div className="min-h-screen flex items-center justify-center"><Loader2 className="animate-spin text-muted-foreground" size={28} /></div>;
   if (!job) return <div className="min-h-screen flex items-center justify-center text-muted-foreground">Job not found.</div>;
 
   const totalInboundWeight = inboundShipments.reduce((sum, s) => sum + (s.total_weight ?? 0), 0);
+  const totalOutputWeight = runs.filter(r => r.status === "completed").reduce((sum, r) => sum + (r.output_weight ?? 0), 0);
   const weightUnit = inboundShipments.find(s => s.weight_unit)?.weight_unit ?? "lbs";
+
+  // Lots available to add to outbound (approved status)
+  const approvedLots = lots.filter(l => l.status === "approved");
+  const outboundLinkedLotIds = new Set((selectedOutbound?.lots ?? []).map(l => l.lot_id));
 
   return (
     <div className="min-h-screen bg-background">
@@ -239,9 +351,7 @@ export default function JobDetailPage({ params }: { params: Promise<{ id: string
             <div className="flex items-center gap-2 flex-wrap">
               <h1 className="text-lg font-bold">{job.job_number}</h1>
               <Badge variant="outline" className="text-xs capitalize">{job.job_type}</Badge>
-              <Badge variant="outline" className="text-xs border capitalize" style={{ background: "transparent" }}>
-                {job.status.replace("_", " ")}
-              </Badge>
+              <Badge variant="outline" className="text-xs capitalize">{job.status.replace("_", " ")}</Badge>
             </div>
           </div>
           {canManage && (
@@ -253,79 +363,49 @@ export default function JobDetailPage({ params }: { params: Promise<{ id: string
       </header>
 
       <main className="max-w-5xl mx-auto px-4 py-5 space-y-5">
-        {/* Job Info Card */}
+        {/* Job Info */}
         <Card>
           <CardContent className="p-4 grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
-            <div>
-              <p className="text-xs text-muted-foreground">Customer / Vendor</p>
-              <p className="font-medium">{job.customer_name ?? job.vendor_name ?? "—"}</p>
-            </div>
-            <div>
-              <p className="text-xs text-muted-foreground">Material</p>
-              <p className="font-medium">{job.material_type_name ?? "—"}</p>
-            </div>
-            <div>
-              <p className="text-xs text-muted-foreground">Customer PO</p>
-              <p className="font-medium">{job.customer_po_number ?? "—"}</p>
-            </div>
-            <div>
-              <p className="text-xs text-muted-foreground">Our PO</p>
-              <p className="font-medium">{job.our_po_number ?? "—"}</p>
-            </div>
-            {job.target_weight != null && (
-              <div>
-                <p className="text-xs text-muted-foreground">Target Weight</p>
-                <p className="font-medium">{Number(job.target_weight).toLocaleString()} {job.target_weight_unit}</p>
-              </div>
-            )}
-            {job.expected_start_date && (
-              <div>
-                <p className="text-xs text-muted-foreground">Expected Start</p>
-                <p className="font-medium">{new Date(job.expected_start_date).toLocaleDateString()}</p>
-              </div>
-            )}
-            {job.description && (
-              <div className="col-span-2 md:col-span-4">
-                <p className="text-xs text-muted-foreground">Description</p>
-                <p>{job.description}</p>
-              </div>
-            )}
+            <div><p className="text-xs text-muted-foreground">Customer / Vendor</p><p className="font-medium">{job.customer_name ?? job.vendor_name ?? "—"}</p></div>
+            <div><p className="text-xs text-muted-foreground">Material</p><p className="font-medium">{job.material_type_name ?? "—"}</p></div>
+            <div><p className="text-xs text-muted-foreground">Customer PO</p><p className="font-medium">{job.customer_po_number ?? "—"}</p></div>
+            <div><p className="text-xs text-muted-foreground">Our PO</p><p className="font-medium">{job.our_po_number ?? "—"}</p></div>
+            {job.target_weight != null && <div><p className="text-xs text-muted-foreground">Target</p><p className="font-medium">{Number(job.target_weight).toLocaleString()} {job.target_weight_unit}</p></div>}
+            {job.description && <div className="col-span-2 md:col-span-4"><p className="text-xs text-muted-foreground">Description</p><p>{job.description}</p></div>}
           </CardContent>
         </Card>
 
         {/* Summary row */}
-        <div className="grid grid-cols-3 gap-3">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
           <Card><CardContent className="p-3 text-center">
             <p className="text-2xl font-bold text-blue-500">{inboundShipments.length}</p>
-            <p className="text-xs text-muted-foreground mt-0.5">Inbound Shipments</p>
+            <p className="text-xs text-muted-foreground mt-0.5">Inbound</p>
           </CardContent></Card>
           <Card><CardContent className="p-3 text-center">
-            <p className="text-2xl font-bold text-green-500">
-              {totalInboundWeight > 0 ? `${Number(totalInboundWeight.toFixed(1)).toLocaleString()}` : "—"}
-            </p>
-            <p className="text-xs text-muted-foreground mt-0.5">Total Received ({weightUnit})</p>
+            <p className="text-xl font-bold text-green-500">{totalInboundWeight > 0 ? Number(totalInboundWeight.toFixed(0)).toLocaleString() : "—"}</p>
+            <p className="text-xs text-muted-foreground mt-0.5">Received ({weightUnit})</p>
           </CardContent></Card>
           <Card><CardContent className="p-3 text-center">
-            <p className="text-2xl font-bold text-purple-500">{lots.length}</p>
-            <p className="text-xs text-muted-foreground mt-0.5">Lots</p>
+            <p className="text-2xl font-bold text-amber-500">{runs.length}</p>
+            <p className="text-xs text-muted-foreground mt-0.5">Runs</p>
+          </CardContent></Card>
+          <Card><CardContent className="p-3 text-center">
+            <p className="text-xl font-bold text-purple-500">{totalOutputWeight > 0 ? Number(totalOutputWeight.toFixed(0)).toLocaleString() : "—"}</p>
+            <p className="text-xs text-muted-foreground mt-0.5">Output ({weightUnit})</p>
           </CardContent></Card>
         </div>
 
         <Tabs defaultValue="inbound">
-          <TabsList>
+          <TabsList className="flex flex-wrap gap-1 h-auto">
             <TabsTrigger value="inbound">Inbound ({inboundShipments.length})</TabsTrigger>
             <TabsTrigger value="lots">Lots ({lots.length})</TabsTrigger>
+            <TabsTrigger value="production">Production ({runs.length})</TabsTrigger>
+            <TabsTrigger value="outbound">Outbound ({outbound.length})</TabsTrigger>
           </TabsList>
 
-          {/* Inbound Shipments Tab */}
+          {/* ── Inbound Tab ── */}
           <TabsContent value="inbound" className="space-y-3 mt-3">
-            {canReceive && (
-              <div className="flex justify-end">
-                <Button size="sm" onClick={() => { setShipForm({ vendorId: "", carrierId: "", carrierName: "", driverName: "", truckNumber: "", trailerNumber: "", scheduledDate: "", locationId: "", notes: "" }); setNewShipmentOpen(true); }}>
-                  <Plus size={14} className="mr-1" />Add Inbound Shipment
-                </Button>
-              </div>
-            )}
+            {canReceive && <div className="flex justify-end"><Button size="sm" onClick={() => { setShipForm({ vendorId: "", carrierId: "", driverName: "", truckNumber: "", trailerNumber: "", scheduledDate: "", locationId: "", notes: "" }); setNewShipmentOpen(true); }}><Plus size={14} className="mr-1" />Add Inbound Shipment</Button></div>}
             {inboundShipments.length === 0 ? (
               <Card><CardContent className="py-10 text-center text-sm text-muted-foreground">No inbound shipments yet.</CardContent></Card>
             ) : (
@@ -339,13 +419,11 @@ export default function JobDetailPage({ params }: { params: Promise<{ id: string
                           <span className="font-medium text-sm">{shp.shipment_number}</span>
                           <Badge className={`text-xs ${SHIP_STATUS_COLORS[shp.status] ?? ""}`} variant="outline">{shp.status}</Badge>
                         </div>
-                        <div className="flex flex-wrap gap-x-3 gap-y-0.5 mt-0.5 text-xs text-muted-foreground">
+                        <div className="flex flex-wrap gap-x-3 mt-0.5 text-xs text-muted-foreground">
                           {shp.carrier_name_resolved && <span>{shp.carrier_name_resolved}</span>}
                           {shp.driver_name && <span>Driver: {shp.driver_name}</span>}
-                          {shp.truck_number && <span>Truck: {shp.truck_number}</span>}
-                          {shp.total_weight != null && <span className="font-medium text-foreground">{Number(shp.total_weight).toLocaleString()} {shp.weight_unit} ({shp.entry_count} entries)</span>}
-                          {shp.received_date && <span>Received: {new Date(shp.received_date).toLocaleDateString()}</span>}
-                          {!shp.received_date && shp.scheduled_date && <span>Scheduled: {new Date(shp.scheduled_date).toLocaleDateString()}</span>}
+                          {shp.total_weight != null && <span className="font-medium text-foreground">{Number(shp.total_weight).toLocaleString()} {shp.weight_unit} · {shp.entry_count} entries</span>}
+                          {shp.received_date ? <span>Received {new Date(shp.received_date).toLocaleDateString()}</span> : shp.scheduled_date ? <span>Scheduled {new Date(shp.scheduled_date).toLocaleDateString()}</span> : null}
                         </div>
                       </div>
                       <ChevronRight size={14} className="text-muted-foreground shrink-0" />
@@ -356,15 +434,9 @@ export default function JobDetailPage({ params }: { params: Promise<{ id: string
             )}
           </TabsContent>
 
-          {/* Lots Tab */}
+          {/* ── Lots Tab ── */}
           <TabsContent value="lots" className="space-y-3 mt-3">
-            {canManage && (
-              <div className="flex justify-end">
-                <Button size="sm" onClick={() => { setLotForm({ materialTypeId: job.material_type_id ?? "", inboundWeight: "", inboundWeightUnit: "lbs", locationId: "", notes: "" }); setNewLotOpen(true); }}>
-                  <Plus size={14} className="mr-1" />Create Lot
-                </Button>
-              </div>
-            )}
+            {canManage && <div className="flex justify-end"><Button size="sm" onClick={() => { setLotForm({ materialTypeId: job.material_type_id ?? "", inboundWeight: "", inboundWeightUnit: "lbs", locationId: "", notes: "" }); setNewLotOpen(true); }}><Plus size={14} className="mr-1" />Create Lot</Button></div>}
             {lots.length === 0 ? (
               <Card><CardContent className="py-10 text-center text-sm text-muted-foreground">No lots yet.</CardContent></Card>
             ) : (
@@ -378,10 +450,10 @@ export default function JobDetailPage({ params }: { params: Promise<{ id: string
                           <span className="font-medium text-sm">{lot.lot_number}</span>
                           <Badge className={`text-xs ${LOT_STATUS_COLORS[lot.status] ?? ""}`} variant="outline">{lot.status.replace("_", " ")}</Badge>
                         </div>
-                        <div className="flex flex-wrap gap-x-3 gap-y-0.5 mt-0.5 text-xs text-muted-foreground">
+                        <div className="flex flex-wrap gap-x-3 mt-0.5 text-xs text-muted-foreground">
                           {lot.material_type_name && <span>{lot.material_type_name}</span>}
                           {lot.inbound_weight != null && <span>{Number(lot.inbound_weight).toLocaleString()} {lot.inbound_weight_unit}</span>}
-                          {lot.location_name && <span>Location: {lot.location_name}</span>}
+                          {lot.location_name && <span>@ {lot.location_name}</span>}
                         </div>
                       </div>
                       <span className="text-xs text-muted-foreground shrink-0 hidden sm:block">{new Date(lot.created_at).toLocaleDateString()}</span>
@@ -391,120 +463,144 @@ export default function JobDetailPage({ params }: { params: Promise<{ id: string
               </div>
             )}
           </TabsContent>
+
+          {/* ── Production Tab ── */}
+          <TabsContent value="production" className="space-y-3 mt-3">
+            {canManage && <div className="flex justify-end"><Button size="sm" onClick={() => { setRunForm({ productionLineId: "", processingTypeId: "", operatorId: "", scheduledStart: "", inputWeight: "", inputWeightUnit: "lbs", notes: "" }); setNewRunOpen(true); }}><Plus size={14} className="mr-1" />New Run</Button></div>}
+            {runs.length === 0 ? (
+              <Card><CardContent className="py-10 text-center text-sm text-muted-foreground">No production runs yet.</CardContent></Card>
+            ) : (
+              <div className="space-y-2">
+                {runs.map(run => (
+                  <Card key={run.id} className="cursor-pointer hover:bg-muted/30 transition-colors" onClick={() => openRunDetail(run)}>
+                    <CardContent className="px-4 py-3 flex items-center gap-3">
+                      <Factory size={16} className="text-muted-foreground shrink-0" />
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="font-medium text-sm">{run.run_number}</span>
+                          <Badge className={`text-xs ${RUN_STATUS_COLORS[run.status] ?? ""}`} variant="outline">{run.status.replace("_", " ")}</Badge>
+                        </div>
+                        <div className="flex flex-wrap gap-x-3 mt-0.5 text-xs text-muted-foreground">
+                          {run.processing_type_name && <span>{run.processing_type_name}</span>}
+                          {run.input_weight != null && <span>In: {Number(run.input_weight).toLocaleString()} {run.input_weight_unit}</span>}
+                          {run.output_weight != null && <span>Out: {Number(run.output_weight).toLocaleString()} {run.output_weight_unit}</span>}
+                          {run.yield_percentage != null && <span className="font-medium text-green-600">Yield: {Number(run.yield_percentage).toFixed(1)}%</span>}
+                          {run.actual_start && <span>Started {new Date(run.actual_start).toLocaleDateString()}</span>}
+                        </div>
+                      </div>
+                      <ChevronRight size={14} className="text-muted-foreground shrink-0" />
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            )}
+          </TabsContent>
+
+          {/* ── Outbound Tab ── */}
+          <TabsContent value="outbound" className="space-y-3 mt-3">
+            {canShip && <div className="flex justify-end"><Button size="sm" onClick={() => { setOutboundForm({ customerId: "", carrierId: "", carrierName: "", driverName: "", truckNumber: "", trailerNumber: "", customerPoNumber: "", bolNumber: "", scheduledDate: "", notes: "" }); setNewOutboundOpen(true); }}><Plus size={14} className="mr-1" />New Outbound Shipment</Button></div>}
+            {outbound.length === 0 ? (
+              <Card><CardContent className="py-10 text-center text-sm text-muted-foreground">No outbound shipments yet.</CardContent></Card>
+            ) : (
+              <div className="space-y-2">
+                {outbound.map(shp => (
+                  <Card key={shp.id} className="cursor-pointer hover:bg-muted/30 transition-colors" onClick={() => openOutboundDetail(shp)}>
+                    <CardContent className="px-4 py-3 flex items-center gap-3">
+                      <ArrowUpFromLine size={16} className="text-muted-foreground shrink-0" />
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="font-medium text-sm">{shp.shipment_number}</span>
+                          <Badge className={`text-xs ${OUT_STATUS_COLORS[shp.status] ?? ""}`} variant="outline">{shp.status}</Badge>
+                        </div>
+                        <div className="flex flex-wrap gap-x-3 mt-0.5 text-xs text-muted-foreground">
+                          {shp.customer_name_resolved && <span>{shp.customer_name_resolved}</span>}
+                          {shp.carrier_name_resolved && <span>{shp.carrier_name_resolved}</span>}
+                          {shp.total_weight != null && <span className="font-medium text-foreground">{Number(shp.total_weight).toLocaleString()} {shp.total_weight_unit}</span>}
+                          {shp.bol_number && <span>BOL: {shp.bol_number}</span>}
+                          {shp.shipped_date ? <span>Shipped {new Date(shp.shipped_date).toLocaleDateString()}</span> : shp.scheduled_date ? <span>Scheduled {new Date(shp.scheduled_date).toLocaleDateString()}</span> : null}
+                        </div>
+                      </div>
+                      <ChevronRight size={14} className="text-muted-foreground shrink-0" />
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            )}
+          </TabsContent>
         </Tabs>
       </main>
 
-      {/* Status Dialog */}
+      {/* ── Status Dialog ── */}
       <Dialog open={statusDialogOpen} onOpenChange={setStatusDialogOpen}>
         <DialogContent>
           <DialogHeader><DialogTitle>Change Job Status</DialogTitle></DialogHeader>
           <div className="space-y-3 py-2">
             <div className="flex flex-wrap gap-2">
-              {JOB_STATUSES.map(s => (
-                <Button key={s} size="sm" variant={newStatus === s ? "default" : "outline"}
-                  onClick={() => setNewStatus(s)}>
-                  <span className="capitalize">{s.replace("_", " ")}</span>
-                </Button>
-              ))}
+              {JOB_STATUSES.map(s => <Button key={s} size="sm" variant={newStatus === s ? "default" : "outline"} onClick={() => setNewStatus(s)} className="capitalize">{s.replace("_", " ")}</Button>)}
             </div>
-            <div className="space-y-1">
-              <Label>Notes (optional)</Label>
-              <Textarea value={statusNote} onChange={e => setStatusNote(e.target.value)} rows={2} />
-            </div>
+            <div className="space-y-1"><Label>Notes (optional)</Label><Textarea value={statusNote} onChange={e => setStatusNote(e.target.value)} rows={2} /></div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setStatusDialogOpen(false)}>Cancel</Button>
-            <Button onClick={handleStatusChange} disabled={saving || newStatus === job.status}>
-              {saving ? <Loader2 size={14} className="animate-spin mr-1" /> : null}Update Status
-            </Button>
+            <Button onClick={handleStatusChange} disabled={saving || newStatus === job.status}>{saving && <Loader2 size={14} className="animate-spin mr-1" />}Update</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
-      {/* New Inbound Shipment Dialog */}
+      {/* ── New Inbound Dialog ── */}
       <Dialog open={newShipmentOpen} onOpenChange={setNewShipmentOpen}>
         <DialogContent className="max-w-lg">
           <DialogHeader><DialogTitle>Add Inbound Shipment</DialogTitle></DialogHeader>
           <div className="space-y-3 py-2">
             <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1">
-                <Label>Vendor</Label>
-                <select className="w-full border border-input rounded-md px-3 py-2 text-sm bg-background"
-                  value={shipForm.vendorId} onChange={e => setShipForm(p => ({ ...p, vendorId: e.target.value }))}>
-                  <option value="">-- Select --</option>
-                  {vendors.map(v => <option key={v.id} value={v.id}>{v.name}</option>)}
+              <div className="space-y-1"><Label>Vendor</Label>
+                <select className="w-full border border-input rounded-md px-3 py-2 text-sm bg-background" value={shipForm.vendorId} onChange={e => setShipForm(p => ({ ...p, vendorId: e.target.value }))}>
+                  <option value="">-- Select --</option>{vendors.map(v => <option key={v.id} value={v.id}>{v.name}</option>)}
                 </select>
               </div>
-              <div className="space-y-1">
-                <Label>Carrier</Label>
-                <select className="w-full border border-input rounded-md px-3 py-2 text-sm bg-background"
-                  value={shipForm.carrierId} onChange={e => setShipForm(p => ({ ...p, carrierId: e.target.value }))}>
-                  <option value="">-- Select --</option>
-                  {carriers.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+              <div className="space-y-1"><Label>Carrier</Label>
+                <select className="w-full border border-input rounded-md px-3 py-2 text-sm bg-background" value={shipForm.carrierId} onChange={e => setShipForm(p => ({ ...p, carrierId: e.target.value }))}>
+                  <option value="">-- Select --</option>{carriers.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
                 </select>
               </div>
             </div>
             <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1">
-                <Label>Driver Name</Label>
-                <Input value={shipForm.driverName} onChange={e => setShipForm(p => ({ ...p, driverName: e.target.value }))} />
-              </div>
-              <div className="space-y-1">
-                <Label>Truck #</Label>
-                <Input value={shipForm.truckNumber} onChange={e => setShipForm(p => ({ ...p, truckNumber: e.target.value }))} />
-              </div>
+              <div className="space-y-1"><Label>Driver</Label><Input value={shipForm.driverName} onChange={e => setShipForm(p => ({ ...p, driverName: e.target.value }))} /></div>
+              <div className="space-y-1"><Label>Truck #</Label><Input value={shipForm.truckNumber} onChange={e => setShipForm(p => ({ ...p, truckNumber: e.target.value }))} /></div>
             </div>
             <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1">
-                <Label>Scheduled Date</Label>
-                <Input type="date" value={shipForm.scheduledDate} onChange={e => setShipForm(p => ({ ...p, scheduledDate: e.target.value }))} />
-              </div>
-              <div className="space-y-1">
-                <Label>Storage Location</Label>
-                <select className="w-full border border-input rounded-md px-3 py-2 text-sm bg-background"
-                  value={shipForm.locationId} onChange={e => setShipForm(p => ({ ...p, locationId: e.target.value }))}>
-                  <option value="">-- Select --</option>
-                  {locations.map(l => <option key={l.id} value={l.id}>{l.name}</option>)}
+              <div className="space-y-1"><Label>Scheduled Date</Label><Input type="date" value={shipForm.scheduledDate} onChange={e => setShipForm(p => ({ ...p, scheduledDate: e.target.value }))} /></div>
+              <div className="space-y-1"><Label>Location</Label>
+                <select className="w-full border border-input rounded-md px-3 py-2 text-sm bg-background" value={shipForm.locationId} onChange={e => setShipForm(p => ({ ...p, locationId: e.target.value }))}>
+                  <option value="">-- Select --</option>{locations.map(l => <option key={l.id} value={l.id}>{l.name}</option>)}
                 </select>
               </div>
             </div>
-            <div className="space-y-1">
-              <Label>Notes</Label>
-              <Textarea value={shipForm.notes} onChange={e => setShipForm(p => ({ ...p, notes: e.target.value }))} rows={2} />
-            </div>
+            <div className="space-y-1"><Label>Notes</Label><Textarea value={shipForm.notes} onChange={e => setShipForm(p => ({ ...p, notes: e.target.value }))} rows={2} /></div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setNewShipmentOpen(false)}>Cancel</Button>
-            <Button onClick={handleCreateShipment} disabled={saving}>
-              {saving ? <Loader2 size={14} className="animate-spin mr-1" /> : null}Create
-            </Button>
+            <Button onClick={handleCreateShipment} disabled={saving}>{saving && <Loader2 size={14} className="animate-spin mr-1" />}Create</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
-      {/* Shipment Detail + Weight Entry Dialog */}
+      {/* ── Inbound Detail Dialog ── */}
       <Dialog open={shipmentDetailOpen} onOpenChange={setShipmentDetailOpen}>
         <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>{selectedShipment?.shipment_number}</DialogTitle>
-          </DialogHeader>
+          <DialogHeader><DialogTitle>{selectedShipment?.shipment_number}</DialogTitle></DialogHeader>
           <div className="space-y-4 py-2">
-            {/* Weight Entries */}
             <div>
               <h3 className="text-sm font-medium mb-2 flex items-center gap-1.5"><Scale size={14} />Weight Entries</h3>
-              {shipmentWeights.length === 0 ? (
-                <p className="text-xs text-muted-foreground">No weight entries yet.</p>
-              ) : (
+              {shipmentWeights.length > 0 && (
                 <div className="space-y-1 mb-3">
-                  <div className="grid grid-cols-4 gap-1 text-xs text-muted-foreground font-medium px-1 mb-1">
-                    <span>#</span><span>Gross</span><span>Tare</span><span>Net</span>
-                  </div>
+                  <div className="grid grid-cols-4 gap-1 text-xs text-muted-foreground font-medium px-1">#<span>Gross</span><span>Tare</span><span>Net</span></div>
                   {shipmentWeights.map(we => (
                     <div key={we.id} className="grid grid-cols-4 gap-1 text-xs bg-muted/30 rounded px-2 py-1.5">
                       <span>{we.entry_number}</span>
                       <span>{Number(we.gross_weight).toLocaleString()} {we.weight_unit}</span>
-                      <span>{we.tare_weight != null ? `${Number(we.tare_weight).toLocaleString()} ${we.weight_unit}` : "—"}</span>
-                      <span className="font-medium">{we.net_weight != null ? `${Number(we.net_weight).toLocaleString()} ${we.weight_unit}` : "—"}</span>
+                      <span>{we.tare_weight != null ? `${Number(we.tare_weight).toLocaleString()}` : "—"}</span>
+                      <span className="font-medium">{we.net_weight != null ? `${Number(we.net_weight).toLocaleString()}` : "—"}</span>
                     </div>
                   ))}
                   <div className="grid grid-cols-4 gap-1 text-xs font-semibold px-2 py-1 border-t">
@@ -515,102 +611,249 @@ export default function JobDetailPage({ params }: { params: Promise<{ id: string
                   </div>
                 </div>
               )}
-
-              {/* Add Weight Entry */}
               {canReceive && selectedShipment?.status !== "received" && (
                 <div className="border rounded-md p-3 space-y-2 bg-muted/20">
-                  <p className="text-xs font-medium">Add Weight Entry</p>
+                  <p className="text-xs font-medium">Add Entry</p>
                   <div className="grid grid-cols-3 gap-2">
-                    <div className="space-y-0.5">
-                      <Label className="text-xs">Gross Weight *</Label>
-                      <Input className="h-8 text-sm" type="number" step="0.01" value={weightForm.grossWeight} onChange={e => setWeightForm(p => ({ ...p, grossWeight: e.target.value }))} />
-                    </div>
-                    <div className="space-y-0.5">
-                      <Label className="text-xs">Tare Weight</Label>
-                      <Input className="h-8 text-sm" type="number" step="0.01" value={weightForm.tareWeight} onChange={e => setWeightForm(p => ({ ...p, tareWeight: e.target.value }))} />
-                    </div>
-                    <div className="space-y-0.5">
-                      <Label className="text-xs">Unit</Label>
-                      <select className="w-full border border-input rounded-md px-2 py-1 text-sm bg-background h-8"
-                        value={weightForm.weightUnit} onChange={e => setWeightForm(p => ({ ...p, weightUnit: e.target.value }))}>
+                    <div className="space-y-0.5"><Label className="text-xs">Gross *</Label><Input className="h-8 text-sm" type="number" step="0.01" value={weightForm.grossWeight} onChange={e => setWeightForm(p => ({ ...p, grossWeight: e.target.value }))} /></div>
+                    <div className="space-y-0.5"><Label className="text-xs">Tare</Label><Input className="h-8 text-sm" type="number" step="0.01" value={weightForm.tareWeight} onChange={e => setWeightForm(p => ({ ...p, tareWeight: e.target.value }))} /></div>
+                    <div className="space-y-0.5"><Label className="text-xs">Unit</Label>
+                      <select className="w-full border border-input rounded-md px-2 py-1 text-sm bg-background h-8" value={weightForm.weightUnit} onChange={e => setWeightForm(p => ({ ...p, weightUnit: e.target.value }))}>
                         {WEIGHT_UNITS.map(u => <option key={u} value={u}>{u}</option>)}
                       </select>
                     </div>
                   </div>
                   <div className="grid grid-cols-2 gap-2">
-                    <div className="space-y-0.5">
-                      <Label className="text-xs">Label (optional)</Label>
-                      <Input className="h-8 text-sm" value={weightForm.containerLabel} onChange={e => setWeightForm(p => ({ ...p, containerLabel: e.target.value }))} placeholder="e.g. Gaylord #3" />
-                    </div>
-                    <div className="flex items-end">
-                      <Button size="sm" className="w-full" onClick={handleAddWeight} disabled={saving || !weightForm.grossWeight}>
-                        {saving ? <Loader2 size={13} className="animate-spin mr-1" /> : <Plus size={13} className="mr-1" />}
-                        Add Entry
-                      </Button>
-                    </div>
+                    <div className="space-y-0.5"><Label className="text-xs">Label (optional)</Label><Input className="h-8 text-sm" value={weightForm.containerLabel} onChange={e => setWeightForm(p => ({ ...p, containerLabel: e.target.value }))} placeholder="e.g. Gaylord #3" /></div>
+                    <div className="flex items-end"><Button size="sm" className="w-full" onClick={handleAddWeight} disabled={saving || !weightForm.grossWeight}>{saving ? <Loader2 size={13} className="animate-spin mr-1" /> : <Plus size={13} className="mr-1" />}Add</Button></div>
                   </div>
                 </div>
               )}
             </div>
-
-            {/* Mark Received */}
             {canReceive && selectedShipment?.status !== "received" && (
-              <Button className="w-full" variant="outline" onClick={handleMarkReceived}>
-                <Check size={14} className="mr-1.5 text-green-500" />Mark as Received
-              </Button>
+              <Button className="w-full" variant="outline" onClick={handleMarkReceived}><Check size={14} className="mr-1.5 text-green-500" />Mark as Received</Button>
             )}
           </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setShipmentDetailOpen(false)}>Close</Button>
-          </DialogFooter>
+          <DialogFooter><Button variant="outline" onClick={() => setShipmentDetailOpen(false)}>Close</Button></DialogFooter>
         </DialogContent>
       </Dialog>
 
-      {/* New Lot Dialog */}
+      {/* ── New Lot Dialog ── */}
       <Dialog open={newLotOpen} onOpenChange={setNewLotOpen}>
         <DialogContent>
           <DialogHeader><DialogTitle>Create Lot</DialogTitle></DialogHeader>
           <div className="space-y-3 py-2">
-            <div className="space-y-1">
-              <Label>Material Type</Label>
-              <select className="w-full border border-input rounded-md px-3 py-2 text-sm bg-background"
-                value={lotForm.materialTypeId} onChange={e => setLotForm(p => ({ ...p, materialTypeId: e.target.value }))}>
-                <option value="">-- Select --</option>
-                {materialTypes.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
+            <div className="space-y-1"><Label>Material Type</Label>
+              <select className="w-full border border-input rounded-md px-3 py-2 text-sm bg-background" value={lotForm.materialTypeId} onChange={e => setLotForm(p => ({ ...p, materialTypeId: e.target.value }))}>
+                <option value="">-- Select --</option>{materialTypes.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
               </select>
             </div>
             <div className="grid grid-cols-3 gap-2 items-end">
-              <div className="col-span-2 space-y-1">
-                <Label>Inbound Weight</Label>
-                <Input type="number" step="0.01" value={lotForm.inboundWeight} onChange={e => setLotForm(p => ({ ...p, inboundWeight: e.target.value }))} />
-              </div>
-              <div className="space-y-1">
-                <Label>Unit</Label>
-                <select className="w-full border border-input rounded-md px-3 py-2 text-sm bg-background"
-                  value={lotForm.inboundWeightUnit} onChange={e => setLotForm(p => ({ ...p, inboundWeightUnit: e.target.value }))}>
+              <div className="col-span-2 space-y-1"><Label>Inbound Weight</Label><Input type="number" step="0.01" value={lotForm.inboundWeight} onChange={e => setLotForm(p => ({ ...p, inboundWeight: e.target.value }))} /></div>
+              <div className="space-y-1"><Label>Unit</Label>
+                <select className="w-full border border-input rounded-md px-3 py-2 text-sm bg-background" value={lotForm.inboundWeightUnit} onChange={e => setLotForm(p => ({ ...p, inboundWeightUnit: e.target.value }))}>
                   {WEIGHT_UNITS.map(u => <option key={u} value={u}>{u}</option>)}
                 </select>
               </div>
             </div>
-            <div className="space-y-1">
-              <Label>Storage Location</Label>
-              <select className="w-full border border-input rounded-md px-3 py-2 text-sm bg-background"
-                value={lotForm.locationId} onChange={e => setLotForm(p => ({ ...p, locationId: e.target.value }))}>
-                <option value="">-- Select --</option>
-                {locations.map(l => <option key={l.id} value={l.id}>{l.name}</option>)}
+            <div className="space-y-1"><Label>Location</Label>
+              <select className="w-full border border-input rounded-md px-3 py-2 text-sm bg-background" value={lotForm.locationId} onChange={e => setLotForm(p => ({ ...p, locationId: e.target.value }))}>
+                <option value="">-- Select --</option>{locations.map(l => <option key={l.id} value={l.id}>{l.name}</option>)}
               </select>
             </div>
-            <div className="space-y-1">
-              <Label>Notes</Label>
-              <Textarea value={lotForm.notes} onChange={e => setLotForm(p => ({ ...p, notes: e.target.value }))} rows={2} />
-            </div>
+            <div className="space-y-1"><Label>Notes</Label><Textarea value={lotForm.notes} onChange={e => setLotForm(p => ({ ...p, notes: e.target.value }))} rows={2} /></div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setNewLotOpen(false)}>Cancel</Button>
-            <Button onClick={handleCreateLot} disabled={saving}>
-              {saving ? <Loader2 size={14} className="animate-spin mr-1" /> : null}Create Lot
-            </Button>
+            <Button onClick={handleCreateLot} disabled={saving}>{saving && <Loader2 size={14} className="animate-spin mr-1" />}Create Lot</Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── New Production Run Dialog ── */}
+      <Dialog open={newRunOpen} onOpenChange={setNewRunOpen}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader><DialogTitle>Schedule Production Run</DialogTitle></DialogHeader>
+          <div className="space-y-3 py-2">
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1"><Label>Production Line</Label>
+                <select className="w-full border border-input rounded-md px-3 py-2 text-sm bg-background" value={runForm.productionLineId} onChange={e => setRunForm(p => ({ ...p, productionLineId: e.target.value }))}>
+                  <option value="">-- Select --</option>{productionLines.map(l => <option key={l.id} value={l.id}>{l.line_id} — {l.name}</option>)}
+                </select>
+              </div>
+              <div className="space-y-1"><Label>Processing Type</Label>
+                <select className="w-full border border-input rounded-md px-3 py-2 text-sm bg-background" value={runForm.processingTypeId} onChange={e => setRunForm(p => ({ ...p, processingTypeId: e.target.value }))}>
+                  <option value="">-- Select --</option>{processingTypes.map(pt => <option key={pt.id} value={pt.id}>{pt.name}</option>)}
+                </select>
+              </div>
+            </div>
+            <div className="grid grid-cols-3 gap-2 items-end">
+              <div className="col-span-2 space-y-1"><Label>Input Weight</Label><Input type="number" step="0.01" value={runForm.inputWeight} onChange={e => setRunForm(p => ({ ...p, inputWeight: e.target.value }))} /></div>
+              <div className="space-y-1"><Label>Unit</Label>
+                <select className="w-full border border-input rounded-md px-3 py-2 text-sm bg-background" value={runForm.inputWeightUnit} onChange={e => setRunForm(p => ({ ...p, inputWeightUnit: e.target.value }))}>
+                  {WEIGHT_UNITS.map(u => <option key={u} value={u}>{u}</option>)}
+                </select>
+              </div>
+            </div>
+            <div className="space-y-1"><Label>Scheduled Start</Label><Input type="datetime-local" value={runForm.scheduledStart} onChange={e => setRunForm(p => ({ ...p, scheduledStart: e.target.value }))} /></div>
+            <div className="space-y-1"><Label>Notes</Label><Textarea value={runForm.notes} onChange={e => setRunForm(p => ({ ...p, notes: e.target.value }))} rows={2} /></div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setNewRunOpen(false)}>Cancel</Button>
+            <Button onClick={handleCreateRun} disabled={saving}>{saving && <Loader2 size={14} className="animate-spin mr-1" />}Schedule Run</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── Run Detail Dialog ── */}
+      <Dialog open={runDetailOpen} onOpenChange={setRunDetailOpen}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader><DialogTitle>{selectedRun?.run_number}</DialogTitle></DialogHeader>
+          {selectedRun && (
+            <div className="space-y-4 py-2">
+              <div className="grid grid-cols-2 gap-3 text-sm">
+                <div><p className="text-xs text-muted-foreground">Status</p><Badge className={`text-xs ${RUN_STATUS_COLORS[selectedRun.status] ?? ""}`} variant="outline">{selectedRun.status.replace("_", " ")}</Badge></div>
+                <div><p className="text-xs text-muted-foreground">Processing Type</p><p className="font-medium">{selectedRun.processing_type_name ?? "—"}</p></div>
+                {selectedRun.input_weight != null && <div><p className="text-xs text-muted-foreground">Input</p><p className="font-medium">{Number(selectedRun.input_weight).toLocaleString()} {selectedRun.input_weight_unit}</p></div>}
+                {selectedRun.output_weight != null && <div><p className="text-xs text-muted-foreground">Output</p><p className="font-medium">{Number(selectedRun.output_weight).toLocaleString()} {selectedRun.output_weight_unit}</p></div>}
+                {selectedRun.yield_percentage != null && <div><p className="text-xs text-muted-foreground">Yield</p><p className="font-bold text-green-600">{Number(selectedRun.yield_percentage).toFixed(1)}%</p></div>}
+                {selectedRun.actual_start && <div><p className="text-xs text-muted-foreground">Started</p><p>{new Date(selectedRun.actual_start).toLocaleString()}</p></div>}
+                {selectedRun.actual_end && <div><p className="text-xs text-muted-foreground">Completed</p><p>{new Date(selectedRun.actual_end).toLocaleString()}</p></div>}
+              </div>
+
+              {/* Status actions */}
+              {canManage && selectedRun.status !== "cancelled" && selectedRun.status !== "completed" && (
+                <div className="flex gap-2 flex-wrap">
+                  {selectedRun.status === "scheduled" && (
+                    <Button size="sm" onClick={() => handleRunStatusChange(selectedRun.id, "in_progress")} disabled={saving}>
+                      <Play size={13} className="mr-1 text-green-500" />Start Run
+                    </Button>
+                  )}
+                  {selectedRun.status === "in_progress" && (
+                    <Button size="sm" onClick={() => handleRunStatusChange(selectedRun.id, "completed")} disabled={saving}>
+                      <Square size={13} className="mr-1 text-red-400" />Complete Run
+                    </Button>
+                  )}
+                  <Button size="sm" variant="outline" onClick={() => handleRunStatusChange(selectedRun.id, "cancelled")} disabled={saving} className="text-red-400">Cancel</Button>
+                </div>
+              )}
+
+              {/* Output weight entry */}
+              {canManage && selectedRun.status !== "cancelled" && (
+                <div className="border rounded-md p-3 space-y-2 bg-muted/20">
+                  <p className="text-xs font-medium flex items-center gap-1.5"><TrendingUp size={13} />Record Output Weight</p>
+                  <div className="grid grid-cols-3 gap-2 items-end">
+                    <div className="col-span-2 space-y-0.5"><Label className="text-xs">Output Weight</Label><Input className="h-8 text-sm" type="number" step="0.01" value={runEditForm.outputWeight} onChange={e => setRunEditForm(p => ({ ...p, outputWeight: e.target.value }))} /></div>
+                    <div className="space-y-0.5"><Label className="text-xs">Unit</Label>
+                      <select className="w-full border border-input rounded-md px-2 py-1 text-sm bg-background h-8" value={runEditForm.outputWeightUnit} onChange={e => setRunEditForm(p => ({ ...p, outputWeightUnit: e.target.value }))}>
+                        {WEIGHT_UNITS.map(u => <option key={u} value={u}>{u}</option>)}
+                      </select>
+                    </div>
+                  </div>
+                  <Button size="sm" onClick={handleSaveRunOutput} disabled={saving || !runEditForm.outputWeight}>
+                    {saving ? <Loader2 size={13} className="animate-spin mr-1" /> : <Check size={13} className="mr-1" />}Save Output
+                  </Button>
+                </div>
+              )}
+            </div>
+          )}
+          <DialogFooter><Button variant="outline" onClick={() => setRunDetailOpen(false)}>Close</Button></DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── New Outbound Dialog ── */}
+      <Dialog open={newOutboundOpen} onOpenChange={setNewOutboundOpen}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader><DialogTitle>New Outbound Shipment</DialogTitle></DialogHeader>
+          <div className="space-y-3 py-2">
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1"><Label>Customer</Label>
+                <select className="w-full border border-input rounded-md px-3 py-2 text-sm bg-background" value={outboundForm.customerId} onChange={e => setOutboundForm(p => ({ ...p, customerId: e.target.value }))}>
+                  <option value="">-- Select --</option>{customers.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                </select>
+              </div>
+              <div className="space-y-1"><Label>Carrier</Label>
+                <select className="w-full border border-input rounded-md px-3 py-2 text-sm bg-background" value={outboundForm.carrierId} onChange={e => setOutboundForm(p => ({ ...p, carrierId: e.target.value }))}>
+                  <option value="">-- Select --</option>{carriers.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                </select>
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1"><Label>Driver</Label><Input value={outboundForm.driverName} onChange={e => setOutboundForm(p => ({ ...p, driverName: e.target.value }))} /></div>
+              <div className="space-y-1"><Label>Truck #</Label><Input value={outboundForm.truckNumber} onChange={e => setOutboundForm(p => ({ ...p, truckNumber: e.target.value }))} /></div>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1"><Label>Customer PO #</Label><Input value={outboundForm.customerPoNumber} onChange={e => setOutboundForm(p => ({ ...p, customerPoNumber: e.target.value }))} /></div>
+              <div className="space-y-1"><Label>BOL #</Label><Input value={outboundForm.bolNumber} onChange={e => setOutboundForm(p => ({ ...p, bolNumber: e.target.value }))} /></div>
+            </div>
+            <div className="space-y-1"><Label>Scheduled Date</Label><Input type="date" value={outboundForm.scheduledDate} onChange={e => setOutboundForm(p => ({ ...p, scheduledDate: e.target.value }))} /></div>
+            <div className="space-y-1"><Label>Notes</Label><Textarea value={outboundForm.notes} onChange={e => setOutboundForm(p => ({ ...p, notes: e.target.value }))} rows={2} /></div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setNewOutboundOpen(false)}>Cancel</Button>
+            <Button onClick={handleCreateOutbound} disabled={saving}>{saving && <Loader2 size={14} className="animate-spin mr-1" />}Create</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── Outbound Detail Dialog ── */}
+      <Dialog open={outboundDetailOpen} onOpenChange={setOutboundDetailOpen}>
+        <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
+          <DialogHeader><DialogTitle>{selectedOutbound?.shipment_number}</DialogTitle></DialogHeader>
+          {selectedOutbound && (
+            <div className="space-y-4 py-2">
+              <div className="grid grid-cols-2 gap-3 text-sm">
+                <div><p className="text-xs text-muted-foreground">Customer</p><p className="font-medium">{selectedOutbound.customer_name_resolved ?? "—"}</p></div>
+                <div><p className="text-xs text-muted-foreground">Carrier</p><p className="font-medium">{selectedOutbound.carrier_name_resolved ?? "—"}</p></div>
+                {selectedOutbound.bol_number && <div><p className="text-xs text-muted-foreground">BOL #</p><p className="font-medium">{selectedOutbound.bol_number}</p></div>}
+                {selectedOutbound.total_weight != null && <div><p className="text-xs text-muted-foreground">Total Weight</p><p className="font-bold">{Number(selectedOutbound.total_weight).toLocaleString()} {selectedOutbound.total_weight_unit}</p></div>}
+              </div>
+
+              {/* Linked lots */}
+              <div>
+                <p className="text-sm font-medium mb-2">Lots on this shipment</p>
+                {(selectedOutbound.lots ?? []).length === 0 ? (
+                  <p className="text-xs text-muted-foreground">No lots added yet.</p>
+                ) : (
+                  <div className="space-y-1">
+                    {(selectedOutbound.lots ?? []).map(l => (
+                      <div key={l.lot_id} className="flex items-center justify-between text-sm bg-muted/30 rounded px-3 py-1.5">
+                        <span className="font-medium">{l.lot_number}</span>
+                        <span className="text-muted-foreground">{l.weight != null ? `${Number(l.weight).toLocaleString()} ${l.weight_unit}` : "—"}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {/* Add lot */}
+                {canShip && selectedOutbound.status !== "shipped" && approvedLots.length > 0 && (
+                  <div className="border rounded-md p-3 space-y-2 bg-muted/20 mt-3">
+                    <p className="text-xs font-medium">Add Lot</p>
+                    <div className="grid grid-cols-3 gap-2 items-end">
+                      <div className="col-span-2 space-y-0.5"><Label className="text-xs">Lot</Label>
+                        <select className="w-full border border-input rounded-md px-2 py-1 text-sm bg-background h-8" value={addLotToOutbound.lotId} onChange={e => setAddLotToOutbound(p => ({ ...p, lotId: e.target.value }))}>
+                          <option value="">-- Select --</option>
+                          {approvedLots.filter(l => !outboundLinkedLotIds.has(l.id)).map(l => <option key={l.id} value={l.id}>{l.lot_number} {l.inbound_weight ? `(${Number(l.inbound_weight).toLocaleString()} ${l.inbound_weight_unit})` : ""}</option>)}
+                        </select>
+                      </div>
+                      <div className="space-y-0.5"><Label className="text-xs">Ship Weight</Label><Input className="h-8 text-sm" type="number" step="0.01" value={addLotToOutbound.weight} onChange={e => setAddLotToOutbound(p => ({ ...p, weight: e.target.value }))} /></div>
+                    </div>
+                    <Button size="sm" onClick={handleAddLotToOutbound} disabled={saving || !addLotToOutbound.lotId}>
+                      {saving ? <Loader2 size={13} className="animate-spin mr-1" /> : <Plus size={13} className="mr-1" />}Add Lot
+                    </Button>
+                  </div>
+                )}
+              </div>
+
+              {/* Mark shipped */}
+              {canShip && selectedOutbound.status !== "shipped" && (selectedOutbound.lots ?? []).length > 0 && (
+                <Button className="w-full" variant="outline" onClick={handleMarkShipped}>
+                  <Check size={14} className="mr-1.5 text-green-500" />Mark as Shipped
+                </Button>
+              )}
+            </div>
+          )}
+          <DialogFooter><Button variant="outline" onClick={() => setOutboundDetailOpen(false)}>Close</Button></DialogFooter>
         </DialogContent>
       </Dialog>
     </div>
