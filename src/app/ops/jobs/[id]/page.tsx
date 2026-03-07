@@ -75,7 +75,20 @@ interface MaterialType { id: string; name: string }
 interface ProcessingType { id: string; name: string }
 interface ProductionLine { id: string; line_id: string; name: string; is_active: boolean }
 
+interface DowntimeEvent {
+  id: string; reason: string; category?: string;
+  start_time: string; end_time?: string; duration_minutes?: number;
+  notes?: string; reported_by_name?: string; cmms_work_order_id?: string;
+}
+
+interface ShipmentDoc {
+  id: string; file_name: string; file_url: string; document_type?: string;
+  uploaded_by_name?: string; uploaded_at: string;
+}
+
 const WEIGHT_UNITS = ["lbs", "kg", "tons"];
+const DOWNTIME_CATEGORIES = ["equipment_failure", "material_jam", "changeover", "maintenance", "operator", "power", "quality_hold", "other"];
+const DOC_TYPES = ["BOL", "COA", "weight_ticket", "customs", "invoice", "packing_list", "other"];
 const JOB_STATUSES = ["open", "in_progress", "on_hold", "completed", "cancelled"];
 
 const LOT_STATUS_COLORS: Record<string, string> = {
@@ -105,7 +118,9 @@ const RUN_STATUS_COLORS: Record<string, string> = {
 const OUT_STATUS_COLORS: Record<string, string> = {
   pending: "bg-slate-500/10 text-slate-500",
   ready: "bg-blue-500/10 text-blue-600",
-  shipped: "bg-green-500/10 text-green-600",
+  staged: "bg-amber-500/10 text-amber-600",
+  shipped: "bg-teal-500/10 text-teal-600",
+  delivered: "bg-green-500/10 text-green-600",
   cancelled: "bg-red-500/10 text-red-400",
 };
 
@@ -148,6 +163,16 @@ export default function JobDetailPage({ params }: { params: Promise<{ id: string
   const [lotDetailOpen, setLotDetailOpen] = useState(false);
   const [selectedLot, setSelectedLot] = useState<Lot | null>(null);
   const [lotStatusEdit, setLotStatusEdit] = useState("");
+
+  // Downtime
+  const [downtimeEvents, setDowntimeEvents] = useState<DowntimeEvent[]>([]);
+  const [downtimeFormOpen, setDowntimeFormOpen] = useState(false);
+  const [downtimeForm, setDowntimeForm] = useState({ reason: "", category: "", startTime: "", endTime: "", notes: "" });
+
+  // Outbound documents
+  const [outboundDocs, setOutboundDocs] = useState<ShipmentDoc[]>([]);
+  const [uploadingDoc, setUploadingDoc] = useState(false);
+  const [docType, setDocType] = useState("BOL");
 
   const [saving, setSaving] = useState(false);
   const [newStatus, setNewStatus] = useState("");
@@ -288,9 +313,15 @@ export default function JobDetailPage({ params }: { params: Promise<{ id: string
   };
 
   const openRunDetail = async (run: ProductionRun) => {
-    const data = await fetch(`/api/ops/production-runs/${run.id}`).then(r => r.json()).catch(() => run);
+    const [data, dt] = await Promise.all([
+      fetch(`/api/ops/production-runs/${run.id}`).then(r => r.json()).catch(() => run),
+      fetch(`/api/ops/downtime-events?runId=${run.id}`).then(r => r.ok ? r.json() : []).catch(() => []),
+    ]);
     setSelectedRun(data);
     setRunEditForm({ outputWeight: String(data.output_weight ?? ""), outputWeightUnit: data.output_weight_unit ?? "lbs", notes: data.notes ?? "" });
+    setDowntimeEvents(Array.isArray(dt) ? dt : []);
+    setDowntimeFormOpen(false);
+    setDowntimeForm({ reason: "", category: "", startTime: "", endTime: "", notes: "" });
     setRunDetailOpen(true);
   };
 
@@ -329,9 +360,14 @@ export default function JobDetailPage({ params }: { params: Promise<{ id: string
   };
 
   const openOutboundDetail = async (shp: OutboundShipment) => {
-    const data = await fetch(`/api/ops/outbound-shipments/${shp.id}`).then(r => r.json()).catch(() => ({ ...shp, lots: [] }));
+    const [data, docs] = await Promise.all([
+      fetch(`/api/ops/outbound-shipments/${shp.id}`).then(r => r.json()).catch(() => ({ ...shp, lots: [] })),
+      fetch(`/api/ops/outbound-shipments/${shp.id}/documents`).then(r => r.ok ? r.json() : []).catch(() => []),
+    ]);
     setSelectedOutbound(data);
+    setOutboundDocs(Array.isArray(docs) ? docs : []);
     setAddLotToOutbound({ lotId: "", weight: "", weightUnit: "lbs" });
+    setDocType("BOL");
     setOutboundDetailOpen(true);
   };
 
@@ -352,6 +388,60 @@ export default function JobDetailPage({ params }: { params: Promise<{ id: string
     if (!selectedOutbound) return;
     await fetch(`/api/ops/outbound-shipments/${selectedOutbound.id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ status: "shipped" }) });
     setOutboundDetailOpen(false); await refresh();
+  };
+
+  const handleMarkStaged = async () => {
+    if (!selectedOutbound) return;
+    await fetch(`/api/ops/outbound-shipments/${selectedOutbound.id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ status: "staged" }) });
+    const data = await fetch(`/api/ops/outbound-shipments/${selectedOutbound.id}`).then(r => r.json()).catch(() => selectedOutbound);
+    setSelectedOutbound(data); await refresh();
+  };
+
+  const handleMarkDelivered = async () => {
+    if (!selectedOutbound) return;
+    await fetch(`/api/ops/outbound-shipments/${selectedOutbound.id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ status: "delivered" }) });
+    setOutboundDetailOpen(false); await refresh();
+  };
+
+  const handleUploadDoc = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (!selectedOutbound || !e.target.files?.[0]) return;
+    setUploadingDoc(true);
+    const file = e.target.files[0];
+    const fd = new FormData();
+    fd.append("file", file);
+    fd.append("documentType", docType);
+    const res = await fetch(`/api/ops/outbound-shipments/${selectedOutbound.id}/documents`, { method: "POST", body: fd });
+    if (res.ok) {
+      const docs = await fetch(`/api/ops/outbound-shipments/${selectedOutbound.id}/documents`).then(r => r.json()).catch(() => []);
+      setOutboundDocs(Array.isArray(docs) ? docs : []);
+    }
+    e.target.value = "";
+    setUploadingDoc(false);
+  };
+
+  const handleDeleteDoc = async (docId: string) => {
+    if (!selectedOutbound) return;
+    await fetch(`/api/ops/outbound-shipments/${selectedOutbound.id}/documents/${docId}`, { method: "DELETE" });
+    setOutboundDocs(prev => prev.filter(d => d.id !== docId));
+  };
+
+  const handleLogDowntime = async () => {
+    if (!selectedRun || !downtimeForm.reason || !downtimeForm.startTime) return;
+    setSaving(true);
+    await fetch("/api/ops/downtime-events", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ runId: selectedRun.id, reason: downtimeForm.reason, category: downtimeForm.category || undefined, startTime: new Date(downtimeForm.startTime).toISOString(), endTime: downtimeForm.endTime ? new Date(downtimeForm.endTime).toISOString() : undefined, notes: downtimeForm.notes || undefined }),
+    });
+    const dt = await fetch(`/api/ops/downtime-events?runId=${selectedRun.id}`).then(r => r.ok ? r.json() : []).catch(() => []);
+    setDowntimeEvents(Array.isArray(dt) ? dt : []);
+    setDowntimeForm({ reason: "", category: "", startTime: "", endTime: "", notes: "" });
+    setDowntimeFormOpen(false);
+    setSaving(false);
+  };
+
+  const handleDeleteDowntime = async (evId: string) => {
+    await fetch(`/api/ops/downtime-events/${evId}`, { method: "DELETE" });
+    setDowntimeEvents(prev => prev.filter(d => d.id !== evId));
   };
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -784,6 +874,70 @@ export default function JobDetailPage({ params }: { params: Promise<{ id: string
                   </Button>
                 </div>
               )}
+
+              {/* Downtime Events */}
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <p className="text-sm font-medium flex items-center gap-1.5">
+                    <Square size={13} className="text-red-400" />
+                    Downtime
+                    {downtimeEvents.length > 0 && (
+                      <span className="text-xs text-muted-foreground ml-1">
+                        ({downtimeEvents.reduce((s, d) => s + (d.duration_minutes ?? 0), 0)} min total)
+                      </span>
+                    )}
+                  </p>
+                  <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => setDowntimeFormOpen(p => !p)}>
+                    <Plus size={11} className="mr-1" />Log
+                  </Button>
+                </div>
+
+                {downtimeFormOpen && (
+                  <div className="border rounded-md p-3 space-y-2 bg-muted/20">
+                    <div className="grid grid-cols-2 gap-2">
+                      <div className="space-y-0.5 col-span-2"><Label className="text-xs">Reason *</Label><Input className="h-8 text-sm" value={downtimeForm.reason} onChange={e => setDowntimeForm(p => ({ ...p, reason: e.target.value }))} placeholder="e.g. Conveyor belt jam" /></div>
+                      <div className="space-y-0.5"><Label className="text-xs">Category</Label>
+                        <select className="w-full border border-input rounded-md px-2 py-1 text-sm bg-background h-8" value={downtimeForm.category} onChange={e => setDowntimeForm(p => ({ ...p, category: e.target.value }))}>
+                          <option value="">-- Select --</option>
+                          {DOWNTIME_CATEGORIES.map(c => <option key={c} value={c}>{c.replace(/_/g, " ")}</option>)}
+                        </select>
+                      </div>
+                      <div className="space-y-0.5"><Label className="text-xs">Start Time *</Label><Input className="h-8 text-sm" type="datetime-local" value={downtimeForm.startTime} onChange={e => setDowntimeForm(p => ({ ...p, startTime: e.target.value }))} /></div>
+                      <div className="space-y-0.5 col-span-2"><Label className="text-xs">End Time</Label><Input className="h-8 text-sm" type="datetime-local" value={downtimeForm.endTime} onChange={e => setDowntimeForm(p => ({ ...p, endTime: e.target.value }))} /></div>
+                      <div className="space-y-0.5 col-span-2"><Label className="text-xs">Notes</Label><Input className="h-8 text-sm" value={downtimeForm.notes} onChange={e => setDowntimeForm(p => ({ ...p, notes: e.target.value }))} /></div>
+                    </div>
+                    <div className="flex gap-2">
+                      <Button size="sm" onClick={handleLogDowntime} disabled={saving || !downtimeForm.reason || !downtimeForm.startTime}>
+                        {saving ? <Loader2 size={12} className="animate-spin mr-1" /> : <Check size={12} className="mr-1" />}Save
+                      </Button>
+                      <Button size="sm" variant="ghost" onClick={() => setDowntimeFormOpen(false)}>Cancel</Button>
+                    </div>
+                  </div>
+                )}
+
+                {downtimeEvents.length > 0 && (
+                  <div className="space-y-1">
+                    {downtimeEvents.map(ev => (
+                      <div key={ev.id} className="flex items-start justify-between text-xs bg-muted/30 rounded px-3 py-2">
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="font-medium">{ev.reason}</span>
+                            {ev.category && <span className="text-muted-foreground">{ev.category.replace(/_/g, " ")}</span>}
+                            {ev.duration_minutes != null && <span className="text-amber-600 font-medium">{ev.duration_minutes} min</span>}
+                          </div>
+                          <div className="text-muted-foreground mt-0.5">
+                            {new Date(ev.start_time).toLocaleString()}
+                            {ev.end_time && ` → ${new Date(ev.end_time).toLocaleTimeString()}`}
+                          </div>
+                        </div>
+                        {canManage && (
+                          <Button size="sm" variant="ghost" className="h-6 w-6 p-0 text-muted-foreground hover:text-red-400 shrink-0 ml-2" onClick={() => handleDeleteDowntime(ev.id)}>×</Button>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
             </div>
           )}
           <DialogFooter><Button variant="outline" onClick={() => setRunDetailOpen(false)}>Close</Button></DialogFooter>
@@ -874,11 +1028,62 @@ export default function JobDetailPage({ params }: { params: Promise<{ id: string
                 )}
               </div>
 
-              {/* Mark shipped */}
-              {canShip && selectedOutbound.status !== "shipped" && (selectedOutbound.lots ?? []).length > 0 && (
-                <Button className="w-full" variant="outline" onClick={handleMarkShipped}>
-                  <Check size={14} className="mr-1.5 text-green-500" />Mark as Shipped
-                </Button>
+              {/* Documents */}
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <p className="text-sm font-medium">Documents ({outboundDocs.length})</p>
+                  {canShip && selectedOutbound.status !== "delivered" && (
+                    <div className="flex items-center gap-2">
+                      <select className="border border-input rounded px-2 py-1 text-xs bg-background h-7" value={docType} onChange={e => setDocType(e.target.value)}>
+                        {DOC_TYPES.map(t => <option key={t} value={t}>{t.replace(/_/g, " ")}</option>)}
+                      </select>
+                      <label className="cursor-pointer">
+                        <input type="file" className="hidden" onChange={handleUploadDoc} accept=".pdf,.png,.jpg,.jpeg,.xlsx,.csv" />
+                        <span className="inline-flex items-center gap-1 text-xs border border-input rounded px-2 py-1 h-7 hover:bg-muted cursor-pointer">
+                          {uploadingDoc ? <Loader2 size={11} className="animate-spin" /> : <Plus size={11} />}Upload
+                        </span>
+                      </label>
+                    </div>
+                  )}
+                </div>
+                {outboundDocs.length === 0 ? (
+                  <p className="text-xs text-muted-foreground">No documents uploaded yet.</p>
+                ) : (
+                  <div className="space-y-1">
+                    {outboundDocs.map(doc => (
+                      <div key={doc.id} className="flex items-center justify-between text-xs bg-muted/30 rounded px-3 py-1.5">
+                        <div className="flex-1 min-w-0">
+                          <a href={doc.file_url} target="_blank" rel="noopener noreferrer" className="font-medium hover:underline text-blue-600 truncate block">{doc.file_name}</a>
+                          <span className="text-muted-foreground">{doc.document_type?.replace(/_/g, " ")} · {doc.uploaded_by_name} · {new Date(doc.uploaded_at).toLocaleDateString()}</span>
+                        </div>
+                        {canShip && (
+                          <Button size="sm" variant="ghost" className="h-6 w-6 p-0 text-muted-foreground hover:text-red-400 shrink-0 ml-2" onClick={() => handleDeleteDoc(doc.id)}>×</Button>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Status flow: pending → staged → shipped → delivered */}
+              {canShip && (
+                <div className="flex flex-col gap-2">
+                  {selectedOutbound.status === "pending" && (selectedOutbound.lots ?? []).length > 0 && (
+                    <Button className="w-full" variant="outline" onClick={handleMarkStaged}>
+                      <Check size={14} className="mr-1.5 text-amber-500" />Mark as Staged
+                    </Button>
+                  )}
+                  {selectedOutbound.status === "staged" && (
+                    <Button className="w-full" variant="outline" onClick={handleMarkShipped}>
+                      <ArrowUpFromLine size={14} className="mr-1.5 text-teal-500" />Mark as Shipped
+                    </Button>
+                  )}
+                  {selectedOutbound.status === "shipped" && (
+                    <Button className="w-full" variant="outline" onClick={handleMarkDelivered}>
+                      <Check size={14} className="mr-1.5 text-green-500" />Confirm Delivery
+                    </Button>
+                  )}
+                </div>
               )}
             </div>
           )}

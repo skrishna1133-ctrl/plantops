@@ -302,6 +302,12 @@ export async function initOpsTables(): Promise<void> {
     )
   `;
   await sql`CREATE INDEX IF NOT EXISTS idx_ops_downtime_tenant ON ops_downtime_events(tenant_id)`;
+  // Migration: add work_order_id if missing
+  await sql`ALTER TABLE ops_downtime_events ADD COLUMN IF NOT EXISTS cmms_work_order_id VARCHAR(36)`.catch(() => {});
+  // Migration: add delivery confirmation fields
+  await sql`ALTER TABLE ops_outbound_shipments ADD COLUMN IF NOT EXISTS staged_date VARCHAR(50)`.catch(() => {});
+  await sql`ALTER TABLE ops_outbound_shipments ADD COLUMN IF NOT EXISTS delivered_date VARCHAR(50)`.catch(() => {});
+  await sql`ALTER TABLE ops_outbound_shipments ADD COLUMN IF NOT EXISTS delivery_notes TEXT`.catch(() => {});
 
   // ── Outbound Shipments ────────────────────────────────────────────────
   await sql`
@@ -1117,7 +1123,8 @@ export const dbOpsOutboundShipments = {
     status?: string; customerId?: string; carrierId?: string; carrierName?: string;
     driverName?: string; truckNumber?: string; trailerNumber?: string;
     customerPoNumber?: string; bolNumber?: string;
-    scheduledDate?: string; shippedDate?: string;
+    scheduledDate?: string; shippedDate?: string; stagedDate?: string;
+    deliveredDate?: string; deliveryNotes?: string;
     totalWeight?: number; totalWeightUnit?: string;
     notes?: string; updatedAt: string;
   }) {
@@ -1134,11 +1141,151 @@ export const dbOpsOutboundShipments = {
         bol_number = COALESCE(${data.bolNumber ?? null}, bol_number),
         scheduled_date = COALESCE(${data.scheduledDate ?? null}, scheduled_date),
         shipped_date = COALESCE(${data.shippedDate ?? null}, shipped_date),
+        staged_date = COALESCE(${data.stagedDate ?? null}, staged_date),
+        delivered_date = COALESCE(${data.deliveredDate ?? null}, delivered_date),
+        delivery_notes = COALESCE(${data.deliveryNotes ?? null}, delivery_notes),
         total_weight = COALESCE(${data.totalWeight ?? null}, total_weight),
         total_weight_unit = COALESCE(${data.totalWeightUnit ?? null}, total_weight_unit),
         notes = COALESCE(${data.notes ?? null}, notes),
         updated_at = ${data.updatedAt}
       WHERE id = ${id} AND tenant_id = ${tenantId}
     `;
+  },
+};
+
+export const dbOpsDowntimeEvents = {
+  async getAll(tenantId: string, runId?: string, jobId?: string) {
+    if (runId) {
+      const r = await sql`
+        SELECT d.*, u.full_name AS reported_by_name
+        FROM ops_downtime_events d
+        LEFT JOIN users u ON u.id = d.reported_by_id
+        WHERE d.tenant_id = ${tenantId} AND d.run_id = ${runId}
+        ORDER BY d.start_time DESC
+      `;
+      return r.rows;
+    }
+    if (jobId) {
+      const r = await sql`
+        SELECT d.*, u.full_name AS reported_by_name, r.run_number
+        FROM ops_downtime_events d
+        LEFT JOIN users u ON u.id = d.reported_by_id
+        LEFT JOIN ops_production_runs r ON r.id = d.run_id
+        WHERE d.tenant_id = ${tenantId} AND r.job_id = ${jobId}
+        ORDER BY d.start_time DESC
+      `;
+      return r.rows;
+    }
+    const r = await sql`
+      SELECT d.*, u.full_name AS reported_by_name, r.run_number
+      FROM ops_downtime_events d
+      LEFT JOIN users u ON u.id = d.reported_by_id
+      LEFT JOIN ops_production_runs r ON r.id = d.run_id
+      WHERE d.tenant_id = ${tenantId}
+      ORDER BY d.start_time DESC
+    `;
+    return r.rows;
+  },
+  async getById(id: string, tenantId: string) {
+    const r = await sql`
+      SELECT d.*, u.full_name AS reported_by_name
+      FROM ops_downtime_events d
+      LEFT JOIN users u ON u.id = d.reported_by_id
+      WHERE d.id = ${id} AND d.tenant_id = ${tenantId}
+    `;
+    return r.rows[0] ?? null;
+  },
+  async create(data: {
+    id: string; tenantId: string; runId?: string; productionLineId?: string;
+    reason: string; category?: string;
+    startTime: string; endTime?: string; durationMinutes?: number;
+    notes?: string; cmmsWorkOrderId?: string;
+    reportedById: string; createdAt: string;
+  }) {
+    await sql`
+      INSERT INTO ops_downtime_events(
+        id, tenant_id, run_id, production_line_id, reason, category,
+        start_time, end_time, duration_minutes, notes, cmms_work_order_id,
+        reported_by_id, created_at
+      ) VALUES (
+        ${data.id}, ${data.tenantId}, ${data.runId ?? null}, ${data.productionLineId ?? null},
+        ${data.reason}, ${data.category ?? null},
+        ${data.startTime}, ${data.endTime ?? null}, ${data.durationMinutes ?? null},
+        ${data.notes ?? null}, ${data.cmmsWorkOrderId ?? null},
+        ${data.reportedById}, ${data.createdAt}
+      )
+    `;
+  },
+  async update(id: string, tenantId: string, data: {
+    reason?: string; category?: string; endTime?: string;
+    durationMinutes?: number; notes?: string; cmmsWorkOrderId?: string;
+  }) {
+    await sql`
+      UPDATE ops_downtime_events SET
+        reason = COALESCE(${data.reason ?? null}, reason),
+        category = COALESCE(${data.category ?? null}, category),
+        end_time = COALESCE(${data.endTime ?? null}, end_time),
+        duration_minutes = COALESCE(${data.durationMinutes ?? null}, duration_minutes),
+        notes = COALESCE(${data.notes ?? null}, notes),
+        cmms_work_order_id = COALESCE(${data.cmmsWorkOrderId ?? null}, cmms_work_order_id)
+      WHERE id = ${id} AND tenant_id = ${tenantId}
+    `;
+  },
+  async delete(id: string, tenantId: string) {
+    await sql`DELETE FROM ops_downtime_events WHERE id = ${id} AND tenant_id = ${tenantId}`;
+  },
+};
+
+export const dbOpsShipmentDocuments = {
+  async getAll(tenantId: string, outboundShipmentId?: string, inboundShipmentId?: string) {
+    if (outboundShipmentId) {
+      const r = await sql`
+        SELECT d.*, u.full_name AS uploaded_by_name
+        FROM ops_shipment_documents d
+        LEFT JOIN users u ON u.id = d.uploaded_by_id
+        WHERE d.tenant_id = ${tenantId} AND d.outbound_shipment_id = ${outboundShipmentId}
+        ORDER BY d.uploaded_at DESC
+      `;
+      return r.rows;
+    }
+    if (inboundShipmentId) {
+      const r = await sql`
+        SELECT d.*, u.full_name AS uploaded_by_name
+        FROM ops_shipment_documents d
+        LEFT JOIN users u ON u.id = d.uploaded_by_id
+        WHERE d.tenant_id = ${tenantId} AND d.inbound_shipment_id = ${inboundShipmentId}
+        ORDER BY d.uploaded_at DESC
+      `;
+      return r.rows;
+    }
+    const r = await sql`
+      SELECT d.*, u.full_name AS uploaded_by_name
+      FROM ops_shipment_documents d
+      LEFT JOIN users u ON u.id = d.uploaded_by_id
+      WHERE d.tenant_id = ${tenantId}
+      ORDER BY d.uploaded_at DESC
+    `;
+    return r.rows;
+  },
+  async create(data: {
+    id: string; tenantId: string;
+    outboundShipmentId?: string; inboundShipmentId?: string;
+    documentType?: string; fileName: string; fileUrl: string;
+    uploadedById: string; uploadedAt: string;
+  }) {
+    await sql`
+      INSERT INTO ops_shipment_documents(
+        id, tenant_id, outbound_shipment_id, inbound_shipment_id,
+        document_type, file_name, file_url, uploaded_by_id, uploaded_at
+      ) VALUES (
+        ${data.id}, ${data.tenantId},
+        ${data.outboundShipmentId ?? null}, ${data.inboundShipmentId ?? null},
+        ${data.documentType ?? null}, ${data.fileName}, ${data.fileUrl},
+        ${data.uploadedById}, ${data.uploadedAt}
+      )
+    `;
+  },
+  async delete(id: string, tenantId: string) {
+    await sql`DELETE FROM ops_shipment_documents WHERE id = ${id} AND tenant_id = ${tenantId}`;
   },
 };

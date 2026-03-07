@@ -43,10 +43,10 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
   const now = new Date().toISOString();
   const updates = { ...body, updatedAt: now };
 
-  // Auto-set shipped date when status → shipped
-  if (body.status === "shipped" && !shipment.shipped_date) {
-    updates.shippedDate = now;
-  }
+  // Auto-set timestamps based on status transitions
+  if (body.status === "staged" && !shipment.staged_date) updates.stagedDate = now;
+  if (body.status === "shipped" && !shipment.shipped_date) updates.shippedDate = now;
+  if (body.status === "delivered" && !shipment.delivered_date) updates.deliveredDate = now;
 
   await dbOpsOutboundShipments.update(id, auth.payload.tenantId!, updates);
 
