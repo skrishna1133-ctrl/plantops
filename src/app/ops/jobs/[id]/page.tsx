@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
   ArrowLeft, Loader2, Plus, Truck, Package, Factory, ChevronRight,
-  Pencil, Check, Scale, ArrowUpFromLine, Play, Square, TrendingUp
+  Pencil, Check, Scale, ArrowUpFromLine, Play, Square, TrendingUp, ExternalLink, FlaskConical
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -45,6 +45,7 @@ interface WeightEntry {
 interface Lot {
   id: string; lot_number: string; status: string; material_type_name?: string;
   inbound_weight?: number; inbound_weight_unit?: string; location_name?: string;
+  qms_lot_id?: string; qms_lot_status?: string; qms_lot_number?: string;
   created_at: string;
 }
 
@@ -144,6 +145,9 @@ export default function JobDetailPage({ params }: { params: Promise<{ id: string
   const [shipmentDetailOpen, setShipmentDetailOpen] = useState(false);
   const [selectedShipment, setSelectedShipment] = useState<InboundShipment | null>(null);
   const [shipmentWeights, setShipmentWeights] = useState<WeightEntry[]>([]);
+  const [lotDetailOpen, setLotDetailOpen] = useState(false);
+  const [selectedLot, setSelectedLot] = useState<Lot | null>(null);
+  const [lotStatusEdit, setLotStatusEdit] = useState("");
 
   const [saving, setSaving] = useState(false);
   const [newStatus, setNewStatus] = useState("");
@@ -250,6 +254,27 @@ export default function JobDetailPage({ params }: { params: Promise<{ id: string
     const body = { jobId: id, materialTypeId: lotForm.materialTypeId || undefined, inboundWeight: lotForm.inboundWeight ? parseFloat(lotForm.inboundWeight) : undefined, inboundWeightUnit: lotForm.inboundWeightUnit, locationId: lotForm.locationId || undefined, notes: lotForm.notes || undefined };
     const res = await fetch("/api/ops/lots", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
     if (res.ok) { setNewLotOpen(false); await refresh(); }
+    setSaving(false);
+  };
+
+  const openLotDetail = (lot: Lot) => {
+    setSelectedLot(lot);
+    setLotStatusEdit(lot.status);
+    setLotDetailOpen(true);
+  };
+
+  const handleLotStatusSave = async () => {
+    if (!selectedLot || lotStatusEdit === selectedLot.status) { setLotDetailOpen(false); return; }
+    setSaving(true);
+    await fetch(`/api/ops/lots/${selectedLot.id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ status: lotStatusEdit }) });
+    await refresh(); setLotDetailOpen(false); setSaving(false);
+  };
+
+  const handleSendToQC = async () => {
+    if (!selectedLot) return;
+    setSaving(true);
+    const res = await fetch(`/api/ops/lots/${selectedLot.id}/send-to-qc`, { method: "POST" });
+    if (res.ok) { await refresh(); setLotDetailOpen(false); }
     setSaving(false);
   };
 
@@ -442,21 +467,25 @@ export default function JobDetailPage({ params }: { params: Promise<{ id: string
             ) : (
               <div className="space-y-2">
                 {lots.map(lot => (
-                  <Card key={lot.id}>
+                  <Card key={lot.id} className="cursor-pointer hover:bg-muted/30 transition-colors" onClick={() => openLotDetail(lot)}>
                     <CardContent className="px-4 py-3 flex items-center gap-3">
                       <Package size={16} className="text-muted-foreground shrink-0" />
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 flex-wrap">
                           <span className="font-medium text-sm">{lot.lot_number}</span>
                           <Badge className={`text-xs ${LOT_STATUS_COLORS[lot.status] ?? ""}`} variant="outline">{lot.status.replace("_", " ")}</Badge>
+                          {lot.qms_lot_status && (
+                            <Badge variant="outline" className="text-xs bg-violet-500/10 text-violet-600">QC: {lot.qms_lot_status.replace("_", " ")}</Badge>
+                          )}
                         </div>
                         <div className="flex flex-wrap gap-x-3 mt-0.5 text-xs text-muted-foreground">
                           {lot.material_type_name && <span>{lot.material_type_name}</span>}
                           {lot.inbound_weight != null && <span>{Number(lot.inbound_weight).toLocaleString()} {lot.inbound_weight_unit}</span>}
                           {lot.location_name && <span>@ {lot.location_name}</span>}
+                          {lot.qms_lot_number && <span className="text-violet-600">QMS: {lot.qms_lot_number}</span>}
                         </div>
                       </div>
-                      <span className="text-xs text-muted-foreground shrink-0 hidden sm:block">{new Date(lot.created_at).toLocaleDateString()}</span>
+                      <ChevronRight size={14} className="text-muted-foreground shrink-0" />
                     </CardContent>
                   </Card>
                 ))}
@@ -854,6 +883,80 @@ export default function JobDetailPage({ params }: { params: Promise<{ id: string
             </div>
           )}
           <DialogFooter><Button variant="outline" onClick={() => setOutboundDetailOpen(false)}>Close</Button></DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── Lot Detail Dialog ── */}
+      <Dialog open={lotDetailOpen} onOpenChange={setLotDetailOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader><DialogTitle>Lot: {selectedLot?.lot_number}</DialogTitle></DialogHeader>
+          {selectedLot && (
+            <div className="space-y-4 py-2">
+              {/* Info row */}
+              <div className="grid grid-cols-2 gap-3 text-sm">
+                <div><p className="text-xs text-muted-foreground">Material</p><p className="font-medium">{selectedLot.material_type_name ?? "—"}</p></div>
+                <div><p className="text-xs text-muted-foreground">Weight</p><p className="font-medium">{selectedLot.inbound_weight != null ? `${Number(selectedLot.inbound_weight).toLocaleString()} ${selectedLot.inbound_weight_unit}` : "—"}</p></div>
+                <div><p className="text-xs text-muted-foreground">Location</p><p className="font-medium">{selectedLot.location_name ?? "—"}</p></div>
+                <div><p className="text-xs text-muted-foreground">Created</p><p className="font-medium">{new Date(selectedLot.created_at).toLocaleDateString()}</p></div>
+              </div>
+
+              {/* Status edit */}
+              {canManage && !["qc_hold", "approved", "shipped", "rejected"].includes(selectedLot.status) && (
+                <div className="space-y-1">
+                  <Label>Status</Label>
+                  <select
+                    className="w-full border border-input rounded-md px-3 py-2 text-sm bg-background"
+                    value={lotStatusEdit}
+                    onChange={e => setLotStatusEdit(e.target.value)}
+                  >
+                    <option value="pending">Pending</option>
+                    <option value="in_storage">In Storage</option>
+                    <option value="in_production">In Production</option>
+                  </select>
+                </div>
+              )}
+
+              {/* QMS section */}
+              <div className="border rounded-md p-3 bg-muted/20 space-y-2">
+                <p className="text-xs font-semibold flex items-center gap-1.5"><FlaskConical size={13} className="text-violet-500" />Quality Control</p>
+                {selectedLot.qms_lot_id ? (
+                  <div className="space-y-2">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="text-sm font-medium">{selectedLot.qms_lot_number}</span>
+                      <Badge variant="outline" className="text-xs bg-violet-500/10 text-violet-600 capitalize">
+                        {(selectedLot.qms_lot_status ?? "").replace(/_/g, " ")}
+                      </Badge>
+                    </div>
+                    <Link
+                      href={`/quality/lots/${selectedLot.qms_lot_id}`}
+                      className="inline-flex items-center gap-1 text-xs text-violet-600 hover:underline"
+                      onClick={() => setLotDetailOpen(false)}
+                    >
+                      <ExternalLink size={11} />View in QMS
+                    </Link>
+                  </div>
+                ) : canManage ? (
+                  <div className="space-y-1">
+                    <p className="text-xs text-muted-foreground">Not yet sent to quality control.</p>
+                    <Button size="sm" variant="outline" onClick={handleSendToQC} disabled={saving} className="text-violet-600 border-violet-300">
+                      {saving ? <Loader2 size={13} className="animate-spin mr-1" /> : <FlaskConical size={13} className="mr-1" />}
+                      Send to QC
+                    </Button>
+                  </div>
+                ) : (
+                  <p className="text-xs text-muted-foreground">Not yet sent to quality control.</p>
+                )}
+              </div>
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setLotDetailOpen(false)}>Close</Button>
+            {canManage && selectedLot && !["qc_hold", "approved", "shipped", "rejected"].includes(selectedLot.status) && (
+              <Button onClick={handleLotStatusSave} disabled={saving || lotStatusEdit === selectedLot?.status}>
+                {saving && <Loader2 size={14} className="animate-spin mr-1" />}Save
+              </Button>
+            )}
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>

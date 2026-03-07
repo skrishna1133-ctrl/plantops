@@ -873,20 +873,24 @@ export const dbOpsLots = {
   async getAll(tenantId: string, jobId?: string) {
     if (jobId) {
       const r = await sql`
-        SELECT l.*, mt.name AS material_type_name, loc.name AS location_name
+        SELECT l.*, mt.name AS material_type_name, loc.name AS location_name,
+          ql.status AS qms_lot_status, ql.lot_number AS qms_lot_number
         FROM ops_lots l
         LEFT JOIN qms_material_types mt ON mt.id = l.material_type_id
         LEFT JOIN ops_locations loc ON loc.id = l.location_id
+        LEFT JOIN qms_lots ql ON ql.id = l.qms_lot_id
         WHERE l.tenant_id = ${tenantId} AND l.job_id = ${jobId}
         ORDER BY l.created_at DESC
       `;
       return r.rows;
     }
     const r = await sql`
-      SELECT l.*, mt.name AS material_type_name, loc.name AS location_name
+      SELECT l.*, mt.name AS material_type_name, loc.name AS location_name,
+        ql.status AS qms_lot_status, ql.lot_number AS qms_lot_number
       FROM ops_lots l
       LEFT JOIN qms_material_types mt ON mt.id = l.material_type_id
       LEFT JOIN ops_locations loc ON loc.id = l.location_id
+      LEFT JOIN qms_lots ql ON ql.id = l.qms_lot_id
       WHERE l.tenant_id = ${tenantId}
       ORDER BY l.created_at DESC
     `;
@@ -894,10 +898,12 @@ export const dbOpsLots = {
   },
   async getById(id: string, tenantId: string) {
     const r = await sql`
-      SELECT l.*, mt.name AS material_type_name, loc.name AS location_name
+      SELECT l.*, mt.name AS material_type_name, loc.name AS location_name,
+        ql.status AS qms_lot_status, ql.lot_number AS qms_lot_number
       FROM ops_lots l
       LEFT JOIN qms_material_types mt ON mt.id = l.material_type_id
       LEFT JOIN ops_locations loc ON loc.id = l.location_id
+      LEFT JOIN qms_lots ql ON ql.id = l.qms_lot_id
       WHERE l.id = ${id} AND l.tenant_id = ${tenantId}
     `;
     return r.rows[0] ?? null;
