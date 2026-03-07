@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import {
   Loader2, LogOut, Factory, Truck, Package,
   Settings, ChevronRight, ArrowLeft,
-  ClipboardList, ArrowDownToLine, ArrowUpFromLine,
+  ClipboardList, ArrowDownToLine, BarChart3,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -197,13 +197,13 @@ export default function OpsPage() {
               </CardContent>
             </Card>
           </Link>
-          <Link href="/ops/jobs?tab=production">
+          <Link href="/ops/reports">
             <Card className="cursor-pointer hover:bg-muted/30 transition-colors border-2">
               <CardContent className="p-4 flex items-center gap-3">
-                <Factory size={22} className="text-orange-500 shrink-0" />
+                <BarChart3 size={22} className="text-orange-500 shrink-0" />
                 <div>
-                  <p className="font-medium text-sm">Production</p>
-                  <p className="text-xs text-muted-foreground">Runs</p>
+                  <p className="font-medium text-sm">Reports</p>
+                  <p className="text-xs text-muted-foreground">Analytics</p>
                 </div>
                 <ChevronRight size={16} className="ml-auto text-muted-foreground" />
               </CardContent>
