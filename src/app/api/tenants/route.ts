@@ -32,7 +32,7 @@ export async function POST(request: NextRequest) {
 
   try {
     const body = await request.json();
-    const { name, code } = body;
+    const { name, code, logoUrl } = body;
 
     if (!name || name.length < 2) {
       return NextResponse.json({ error: "Tenant name must be at least 2 characters" }, { status: 400 });
@@ -47,6 +47,7 @@ export async function POST(request: NextRequest) {
       code: code.toUpperCase().trim(),
       active: true,
       createdAt: new Date().toISOString(),
+      logoUrl: logoUrl?.trim() || null,
     };
 
     await dbTenants.create(tenant);

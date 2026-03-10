@@ -12,6 +12,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { ThemeToggle } from "@/components/theme-toggle";
+import { CompanyBadge } from "@/components/company-badge";
 import type { UserRole } from "@/lib/schemas";
 
 const MANAGER_ROLES = ["maintenance_manager", "engineer", "admin", "owner"];
@@ -61,6 +62,8 @@ export default function MaintenancePage() {
   const router = useRouter();
   const [role, setRole] = useState<UserRole | null>(null);
   const [userName, setUserName] = useState("");
+  const [tenantName, setTenantName] = useState<string | null>(null);
+  const [tenantLogoUrl, setTenantLogoUrl] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [stats, setStats] = useState<DashboardStats>({ machinesDown: 0, openWorkOrders: 0, pendingSignOffs: 0, flaggedChecklists: 0, dueToday: 0 });
   const [myWorkOrders, setMyWorkOrders] = useState<WorkOrder[]>([]);
@@ -129,6 +132,8 @@ export default function MaintenancePage() {
         if (!data?.authenticated) { router.push("/login"); return; }
         setRole(data.role as UserRole);
         setUserName(data.fullName || data.username || "");
+        setTenantName(data.tenantName ?? null);
+        setTenantLogoUrl(data.tenantLogoUrl ?? null);
         fetchData(data.role as UserRole);
       })
       .finally(() => setLoading(false));
@@ -163,7 +168,9 @@ export default function MaintenancePage() {
             </div>
             <div>
               <h1 className="text-lg font-bold">Maintenance</h1>
-              <p className="text-xs text-muted-foreground">{userName}</p>
+              <p className="text-xs text-muted-foreground flex items-center gap-1.5">
+                {tenantName && <><CompanyBadge name={tenantName} logoUrl={tenantLogoUrl} className="w-4 h-4 text-[8px]" />{tenantName} · </>}{userName}
+              </p>
             </div>
           </div>
           <div className="flex items-center gap-2">

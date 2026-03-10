@@ -317,6 +317,7 @@ export interface Tenant {
   code: string;
   active: boolean;
   createdAt: string;
+  logoUrl?: string | null;
 }
 
 // ─── Messaging ───

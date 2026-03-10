@@ -11,6 +11,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { ThemeToggle } from "@/components/theme-toggle";
+import { CompanyBadge } from "@/components/company-badge";
 
 interface DashboardData {
   pendingQc: number;
@@ -26,6 +27,8 @@ export default function QualityPage() {
   const router = useRouter();
   const [role, setRole] = useState<string>("");
   const [userName, setUserName] = useState<string>("");
+  const [tenantName, setTenantName] = useState<string | null>(null);
+  const [tenantLogoUrl, setTenantLogoUrl] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [dashboard, setDashboard] = useState<DashboardData | null>(null);
   const [pendingInspections, setPendingInspections] = useState<Array<{ id: string; lot_number: string; created_at: string }>>([]);
@@ -39,6 +42,8 @@ export default function QualityPage() {
         if (!data.authenticated) { router.push("/login?from=/quality"); return; }
         setRole(data.role);
         setUserName(data.fullName || "");
+        setTenantName(data.tenantName ?? null);
+        setTenantLogoUrl(data.tenantLogoUrl ?? null);
 
         if (data.role === "quality_manager" || data.role === "admin" || data.role === "owner") {
           // Load manager dashboard — catch individually so one failure doesn't blank the page
@@ -104,7 +109,9 @@ export default function QualityPage() {
             </div>
             <div>
               <h1 className="font-bold text-lg">Quality Management</h1>
-              <p className="text-xs text-muted-foreground">{userName}</p>
+              <p className="text-xs text-muted-foreground flex items-center gap-1.5">
+                {tenantName && <><CompanyBadge name={tenantName} logoUrl={tenantLogoUrl} className="w-4 h-4 text-[8px]" />{tenantName} · </>}{userName}
+              </p>
             </div>
           </div>
           <div className="flex items-center gap-1">

@@ -54,6 +54,7 @@ import ShipmentsTab from "@/components/admin/shipments-tab";
 import SuperAdminUsersTab from "@/components/admin/super-admin-users-tab";
 import ActivityLogTab from "@/components/admin/activity-log-tab";
 import { ThemeToggle } from "@/components/theme-toggle";
+import { CompanyBadge } from "@/components/company-badge";
 
 const criticalityColors: Record<string, string> = {
   minor: "bg-yellow-500/20 text-yellow-400 border-yellow-500/30",
@@ -107,6 +108,7 @@ export default function AdminPage() {
   // Super admin state
   const [isSuperAdmin, setIsSuperAdmin] = useState(false);
   const [tenantName, setTenantName] = useState<string | null>(null);
+  const [tenantLogoUrl, setTenantLogoUrl] = useState<string | null>(null);
   const [tenants, setTenants] = useState<Tenant[]>([]);
   const [viewAsTenant, setViewAsTenant] = useState<string>("all");
 
@@ -135,6 +137,7 @@ export default function AdminPage() {
             .catch(() => {});
         } else {
           setTenantName(data.tenantName || null);
+          setTenantLogoUrl(data.tenantLogoUrl ?? null);
         }
       })
       .catch(() => {});
@@ -253,9 +256,13 @@ export default function AdminPage() {
                 <ArrowLeft size={20} />
               </Button>
             </Link>
-            <div className="w-10 h-10 rounded-lg bg-orange-500 flex items-center justify-center">
-              <span className="text-white font-bold text-lg">P</span>
-            </div>
+            {!isSuperAdmin && tenantName ? (
+              <CompanyBadge name={tenantName} logoUrl={tenantLogoUrl} className="w-10 h-10 text-sm" />
+            ) : (
+              <div className="w-10 h-10 rounded-lg bg-orange-500 flex items-center justify-center">
+                <span className="text-white font-bold text-lg">P</span>
+              </div>
+            )}
             <div>
               <h1 className="text-xl font-bold tracking-tight">
                 Admin Dashboard

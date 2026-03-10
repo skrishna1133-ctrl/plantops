@@ -35,9 +35,11 @@ export async function GET(request: NextRequest) {
     }
 
     let tenantName: string | null = null;
+    let tenantLogoUrl: string | null = null;
     if (payload.tenantId) {
       const tenant = await dbTenants.getById(payload.tenantId);
       tenantName = tenant?.name ?? null;
+      tenantLogoUrl = tenant?.logoUrl ?? null;
     }
 
     return NextResponse.json({
@@ -47,6 +49,7 @@ export async function GET(request: NextRequest) {
       fullName: user.fullName,
       tenantId: payload.tenantId,
       tenantName,
+      tenantLogoUrl,
     });
   } catch {
     return NextResponse.json({ authenticated: false }, { status: 401 });

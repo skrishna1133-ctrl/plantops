@@ -12,6 +12,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { ThemeToggle } from "@/components/theme-toggle";
+import { CompanyBadge } from "@/components/company-badge";
 
 interface Job {
   id: string;
@@ -53,6 +54,8 @@ export default function OpsPage() {
   const router = useRouter();
   const [role, setRole] = useState<string>("");
   const [userName, setUserName] = useState<string>("");
+  const [tenantName, setTenantName] = useState<string | null>(null);
+  const [tenantLogoUrl, setTenantLogoUrl] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
   const [jobs, setJobs] = useState<Job[]>([]);
@@ -64,6 +67,8 @@ export default function OpsPage() {
       if (!data.authenticated) { router.push("/login?from=/ops"); return; }
       setRole(data.role);
       setUserName(data.fullName || "");
+      setTenantName(data.tenantName ?? null);
+      setTenantLogoUrl(data.tenantLogoUrl ?? null);
 
       const [jobsData, inboundData, lotsData] = await Promise.all([
         fetch("/api/ops/jobs").then(r => r.json()).catch(() => []),
@@ -112,7 +117,9 @@ export default function OpsPage() {
               <Factory size={20} className="text-orange-500" />
               <div>
                 <h1 className="text-lg font-bold leading-none">Operations</h1>
-                <p className="text-xs text-muted-foreground">{userName}</p>
+                <p className="text-xs text-muted-foreground flex items-center gap-1.5">
+                  {tenantName && <><CompanyBadge name={tenantName} logoUrl={tenantLogoUrl} className="w-4 h-4 text-[8px]" />{tenantName} · </>}{userName}
+                </p>
               </div>
             </div>
           </div>
