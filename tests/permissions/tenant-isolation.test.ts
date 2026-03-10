@@ -65,10 +65,11 @@ describe("OPS jobs — tenant isolation", () => {
 describe("CMMS work orders — tenant isolation", () => {
   it("other tenant sees no work orders", async () => {
     const req = await asOther("/api/maintenance/work-orders");
-    // other tenant admin is not a maintenance role — will get 403
-    // That still demonstrates isolation: no TEST data leaks
+    // admin is an allowed role for work-orders — returns 200 with an empty list for OTHER tenant
     const res = await GET_WOS(req);
-    expect(res.status).toBe(403);
+    const body = await expectStatus<{ id: string }[]>(res, 200);
+    const ids = body.map(w => w.id);
+    expect(ids).not.toContain(IDS.CMMS_WORK_ORDER);
   });
 
   it("maintenance_manager from other tenant cannot see TEST work orders", async () => {

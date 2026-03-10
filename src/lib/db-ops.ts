@@ -630,7 +630,7 @@ export const dbOpsJobs = {
       FROM ops_jobs j
       LEFT JOIN ops_customers c ON c.id = j.customer_id
       LEFT JOIN ops_vendors v ON v.id = j.vendor_id
-      LEFT JOIN qms_material_types mt ON mt.id = j.material_type_id
+      LEFT JOIN qms_material_types mt ON mt.id = j.material_type_id::text
       WHERE j.tenant_id = ${tenantId}
         AND (${status}::text IS NULL OR j.status = ${status})
         AND (${jobType}::text IS NULL OR j.job_type = ${jobType})
@@ -647,7 +647,7 @@ export const dbOpsJobs = {
       FROM ops_jobs j
       LEFT JOIN ops_customers c ON c.id = j.customer_id
       LEFT JOIN ops_vendors v ON v.id = j.vendor_id
-      LEFT JOIN qms_material_types mt ON mt.id = j.material_type_id
+      LEFT JOIN qms_material_types mt ON mt.id = j.material_type_id::text
       WHERE j.id = ${id} AND j.tenant_id = ${tenantId}
     `;
     return r.rows[0] ?? null;
@@ -846,7 +846,7 @@ export const dbOpsInboundShipments = {
     const r = await sql`
       SELECT we.*, u.full_name AS entered_by_name
       FROM ops_weight_entries we
-      LEFT JOIN users u ON u.id = we.entered_by_id
+      LEFT JOIN users u ON u.id::text = we.entered_by_id
       WHERE we.inbound_shipment_id = ${shipmentId}
       ORDER BY we.entry_number ASC
     `;
@@ -882,9 +882,9 @@ export const dbOpsLots = {
         SELECT l.*, mt.name AS material_type_name, loc.name AS location_name,
           ql.status AS qms_lot_status, ql.lot_number AS qms_lot_number
         FROM ops_lots l
-        LEFT JOIN qms_material_types mt ON mt.id = l.material_type_id
+        LEFT JOIN qms_material_types mt ON mt.id = l.material_type_id::text::text
         LEFT JOIN ops_locations loc ON loc.id = l.location_id
-        LEFT JOIN qms_lots ql ON ql.id = l.qms_lot_id
+        LEFT JOIN qms_lots ql ON ql.id = l.qms_lot_id::text::text
         WHERE l.tenant_id = ${tenantId} AND l.job_id = ${jobId}
         ORDER BY l.created_at DESC
       `;
@@ -894,9 +894,9 @@ export const dbOpsLots = {
       SELECT l.*, mt.name AS material_type_name, loc.name AS location_name,
         ql.status AS qms_lot_status, ql.lot_number AS qms_lot_number
       FROM ops_lots l
-      LEFT JOIN qms_material_types mt ON mt.id = l.material_type_id
+      LEFT JOIN qms_material_types mt ON mt.id = l.material_type_id::text
       LEFT JOIN ops_locations loc ON loc.id = l.location_id
-      LEFT JOIN qms_lots ql ON ql.id = l.qms_lot_id
+      LEFT JOIN qms_lots ql ON ql.id = l.qms_lot_id::text
       WHERE l.tenant_id = ${tenantId}
       ORDER BY l.created_at DESC
     `;
@@ -907,9 +907,9 @@ export const dbOpsLots = {
       SELECT l.*, mt.name AS material_type_name, loc.name AS location_name,
         ql.status AS qms_lot_status, ql.lot_number AS qms_lot_number
       FROM ops_lots l
-      LEFT JOIN qms_material_types mt ON mt.id = l.material_type_id
+      LEFT JOIN qms_material_types mt ON mt.id = l.material_type_id::text
       LEFT JOIN ops_locations loc ON loc.id = l.location_id
-      LEFT JOIN qms_lots ql ON ql.id = l.qms_lot_id
+      LEFT JOIN qms_lots ql ON ql.id = l.qms_lot_id::text
       WHERE l.id = ${id} AND l.tenant_id = ${tenantId}
     `;
     return r.rows[0] ?? null;
@@ -972,8 +972,8 @@ export const dbOpsProductionRuns = {
           op.full_name AS operator_name, sv.full_name AS supervisor_name
         FROM ops_production_runs r
         LEFT JOIN ops_processing_types pt ON pt.id = r.processing_type_id
-        LEFT JOIN users op ON op.id = r.operator_id
-        LEFT JOIN users sv ON sv.id = r.supervisor_id
+        LEFT JOIN users op ON op.id::text = r.operator_id
+        LEFT JOIN users sv ON sv.id::text = r.supervisor_id
         WHERE r.tenant_id = ${tenantId} AND r.job_id = ${jobId}
         ORDER BY r.created_at DESC
       `;
@@ -984,8 +984,8 @@ export const dbOpsProductionRuns = {
         op.full_name AS operator_name, sv.full_name AS supervisor_name
       FROM ops_production_runs r
       LEFT JOIN ops_processing_types pt ON pt.id = r.processing_type_id
-      LEFT JOIN users op ON op.id = r.operator_id
-      LEFT JOIN users sv ON sv.id = r.supervisor_id
+      LEFT JOIN users op ON op.id::text = r.operator_id
+      LEFT JOIN users sv ON sv.id::text = r.supervisor_id
       WHERE r.tenant_id = ${tenantId}
       ORDER BY r.created_at DESC
     `;
@@ -997,8 +997,8 @@ export const dbOpsProductionRuns = {
         op.full_name AS operator_name, sv.full_name AS supervisor_name
       FROM ops_production_runs r
       LEFT JOIN ops_processing_types pt ON pt.id = r.processing_type_id
-      LEFT JOIN users op ON op.id = r.operator_id
-      LEFT JOIN users sv ON sv.id = r.supervisor_id
+      LEFT JOIN users op ON op.id::text = r.operator_id
+      LEFT JOIN users sv ON sv.id::text = r.supervisor_id
       WHERE r.id = ${id} AND r.tenant_id = ${tenantId}
     `;
     return r.rows[0] ?? null;
@@ -1159,7 +1159,7 @@ export const dbOpsDowntimeEvents = {
       const r = await sql`
         SELECT d.*, u.full_name AS reported_by_name
         FROM ops_downtime_events d
-        LEFT JOIN users u ON u.id = d.reported_by_id
+        LEFT JOIN users u ON u.id::text = d.reported_by_id
         WHERE d.tenant_id = ${tenantId} AND d.run_id = ${runId}
         ORDER BY d.start_time DESC
       `;
@@ -1169,7 +1169,7 @@ export const dbOpsDowntimeEvents = {
       const r = await sql`
         SELECT d.*, u.full_name AS reported_by_name, r.run_number
         FROM ops_downtime_events d
-        LEFT JOIN users u ON u.id = d.reported_by_id
+        LEFT JOIN users u ON u.id::text = d.reported_by_id
         LEFT JOIN ops_production_runs r ON r.id = d.run_id
         WHERE d.tenant_id = ${tenantId} AND r.job_id = ${jobId}
         ORDER BY d.start_time DESC
@@ -1179,7 +1179,7 @@ export const dbOpsDowntimeEvents = {
     const r = await sql`
       SELECT d.*, u.full_name AS reported_by_name, r.run_number
       FROM ops_downtime_events d
-      LEFT JOIN users u ON u.id = d.reported_by_id
+      LEFT JOIN users u ON u.id::text = d.reported_by_id
       LEFT JOIN ops_production_runs r ON r.id = d.run_id
       WHERE d.tenant_id = ${tenantId}
       ORDER BY d.start_time DESC
@@ -1190,7 +1190,7 @@ export const dbOpsDowntimeEvents = {
     const r = await sql`
       SELECT d.*, u.full_name AS reported_by_name
       FROM ops_downtime_events d
-      LEFT JOIN users u ON u.id = d.reported_by_id
+      LEFT JOIN users u ON u.id::text = d.reported_by_id
       WHERE d.id = ${id} AND d.tenant_id = ${tenantId}
     `;
     return r.rows[0] ?? null;
@@ -1242,7 +1242,7 @@ export const dbOpsShipmentDocuments = {
       const r = await sql`
         SELECT d.*, u.full_name AS uploaded_by_name
         FROM ops_shipment_documents d
-        LEFT JOIN users u ON u.id = d.uploaded_by_id
+        LEFT JOIN users u ON u.id::text = d.uploaded_by_id
         WHERE d.tenant_id = ${tenantId} AND d.outbound_shipment_id = ${outboundShipmentId}
         ORDER BY d.uploaded_at DESC
       `;
@@ -1252,7 +1252,7 @@ export const dbOpsShipmentDocuments = {
       const r = await sql`
         SELECT d.*, u.full_name AS uploaded_by_name
         FROM ops_shipment_documents d
-        LEFT JOIN users u ON u.id = d.uploaded_by_id
+        LEFT JOIN users u ON u.id::text = d.uploaded_by_id
         WHERE d.tenant_id = ${tenantId} AND d.inbound_shipment_id = ${inboundShipmentId}
         ORDER BY d.uploaded_at DESC
       `;
@@ -1261,7 +1261,7 @@ export const dbOpsShipmentDocuments = {
     const r = await sql`
       SELECT d.*, u.full_name AS uploaded_by_name
       FROM ops_shipment_documents d
-      LEFT JOIN users u ON u.id = d.uploaded_by_id
+      LEFT JOIN users u ON u.id::text = d.uploaded_by_id
       WHERE d.tenant_id = ${tenantId}
       ORDER BY d.uploaded_at DESC
     `;

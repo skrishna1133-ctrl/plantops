@@ -55,5 +55,6 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
 
   logActivity({ tenantId: auth.payload.tenantId!, userId: auth.payload.userId, role: auth.payload.role,
     action: "updated", entityType: "ops_job", entityId: id, entityName: job.job_number }).catch(() => {});
-  return NextResponse.json({ ok: true });
+  const updatedJob = await dbOpsJobs.getById(id, auth.payload.tenantId!);
+  return NextResponse.json(updatedJob);
 }

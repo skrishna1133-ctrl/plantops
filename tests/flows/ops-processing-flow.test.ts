@@ -81,8 +81,8 @@ describe("Full OPS processing flow", () => {
       body: { grossWeight: 1050, tareWeight: 100, weightUnit: "lbs", containerLabel: "GAYLORD-A" },
     });
     const res = await CREATE_WEIGHT(req, { params: Promise.resolve({ id: inboundId }) });
-    const body = await expectStatus<{ id: string; netWeight: number }>(res, 201);
-    expect(body.netWeight).toBe(950);
+    const body = await expectStatus<{ id: string; net: number }>(res, 201);
+    expect(body.net).toBe(950);
   });
 
   it("Step 4: Create a Lot linked to the inbound shipment", async () => {
@@ -100,7 +100,7 @@ describe("Full OPS processing flow", () => {
     const body = await expectStatus<{ id: string; lotNumber: string }>(res, 201);
     lotId = body.id;
     expect(lotId).toBeTruthy();
-    expect(body.lotNumber).toMatch(/^OPS-LOT-/);
+    expect(body.lotNumber).toMatch(/^LOT-\d{4}-\d{2}-\d{4}$/);
   });
 
   it("Step 5: Create a Production Run for the lot", async () => {

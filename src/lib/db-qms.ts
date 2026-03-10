@@ -407,7 +407,7 @@ export const dbQmsLots = {
              u.full_name AS created_by_name
       FROM qms_lots l
       LEFT JOIN qms_material_types mt ON mt.id = l.material_type_id
-      LEFT JOIN users u ON u.id = l.created_by_id
+      LEFT JOIN users u ON u.id::text = l.created_by_id
       WHERE l.tenant_id = ${tenantId}
         AND (${filters?.status ?? null}::TEXT IS NULL OR l.status = ${filters?.status ?? null})
         AND (${filters?.materialTypeId ?? null}::TEXT IS NULL OR l.material_type_id = ${filters?.materialTypeId ?? null})
@@ -422,7 +422,7 @@ export const dbQmsLots = {
              u.full_name AS created_by_name
       FROM qms_lots l
       LEFT JOIN qms_material_types mt ON mt.id = l.material_type_id
-      LEFT JOIN users u ON u.id = l.created_by_id
+      LEFT JOIN users u ON u.id::text = l.created_by_id
       WHERE l.id = ${id} AND l.tenant_id = ${tenantId}
     `;
     return r.rows[0] ?? null;
@@ -504,8 +504,8 @@ export const dbQmsInspections = {
              rv.full_name AS reviewed_by_name
       FROM qms_inspections i
       LEFT JOIN qms_lots l ON l.id = i.lot_id
-      LEFT JOIN users u ON u.id = i.inspected_by_id
-      LEFT JOIN users rv ON rv.id = i.reviewed_by_id
+      LEFT JOIN users u ON u.id::text = i.inspected_by_id
+      LEFT JOIN users rv ON rv.id::text = i.reviewed_by_id
       WHERE i.tenant_id = ${tenantId}
         AND (${filters?.lotId ?? null}::TEXT IS NULL OR i.lot_id = ${filters?.lotId ?? null})
         AND (${filters?.status ?? null}::TEXT IS NULL OR i.status = ${filters?.status ?? null})
@@ -522,8 +522,8 @@ export const dbQmsInspections = {
              rv.full_name AS reviewed_by_name
       FROM qms_inspections i
       LEFT JOIN qms_lots l ON l.id = i.lot_id
-      LEFT JOIN users u ON u.id = i.inspected_by_id
-      LEFT JOIN users rv ON rv.id = i.reviewed_by_id
+      LEFT JOIN users u ON u.id::text = i.inspected_by_id
+      LEFT JOIN users rv ON rv.id::text = i.reviewed_by_id
       WHERE i.id = ${id} AND i.tenant_id = ${tenantId}
     `;
     if (!r.rows[0]) return null;
@@ -635,7 +635,7 @@ export const dbQmsInspections = {
       SELECT i.*, l.lot_number, u.full_name AS inspected_by_name
       FROM qms_inspections i
       LEFT JOIN qms_lots l ON l.id = i.lot_id
-      LEFT JOIN users u ON u.id = i.inspected_by_id
+      LEFT JOIN users u ON u.id::text = i.inspected_by_id
       WHERE i.tenant_id = ${tenantId} AND i.status = 'submitted'
       ORDER BY i.submitted_at ASC
     `;
@@ -653,8 +653,8 @@ export const dbQmsNcrs = {
              cb.full_name AS created_by_name
       FROM qms_ncrs n
       LEFT JOIN qms_lots l ON l.id = n.lot_id
-      LEFT JOIN users u ON u.id = n.assigned_to_id
-      LEFT JOIN users cb ON cb.id = n.created_by_id
+      LEFT JOIN users u ON u.id::text = n.assigned_to_id
+      LEFT JOIN users cb ON cb.id::text = n.created_by_id
       WHERE n.tenant_id = ${tenantId}
         AND (${filters?.status ?? null}::TEXT IS NULL OR n.status = ${filters?.status ?? null})
         AND (${filters?.assignedToId ?? null}::TEXT IS NULL OR n.assigned_to_id = ${filters?.assignedToId ?? null})
@@ -672,9 +672,9 @@ export const dbQmsNcrs = {
              cl.full_name AS closed_by_name
       FROM qms_ncrs n
       LEFT JOIN qms_lots l ON l.id = n.lot_id
-      LEFT JOIN users u ON u.id = n.assigned_to_id
-      LEFT JOIN users cb ON cb.id = n.created_by_id
-      LEFT JOIN users cl ON cl.id = n.closed_by_id
+      LEFT JOIN users u ON u.id::text = n.assigned_to_id
+      LEFT JOIN users cb ON cb.id::text = n.created_by_id
+      LEFT JOIN users cl ON cl.id::text = n.closed_by_id
       WHERE n.id = ${id} AND n.tenant_id = ${tenantId}
     `;
     if (!r.rows[0]) return null;
@@ -682,7 +682,7 @@ export const dbQmsNcrs = {
     const acts = await sql`
       SELECT a.*, u.full_name AS user_name
       FROM qms_ncr_activities a
-      LEFT JOIN users u ON u.id = a.user_id
+      LEFT JOIN users u ON u.id::text = a.user_id
       WHERE a.ncr_id = ${id}
       ORDER BY a.created_at ASC
     `;
@@ -783,7 +783,7 @@ export const dbQmsComplaints = {
     const r = await sql`
       SELECT c.*, u.full_name AS created_by_name
       FROM qms_complaints c
-      LEFT JOIN users u ON u.id = c.created_by_id
+      LEFT JOIN users u ON u.id::text = c.created_by_id
       WHERE c.tenant_id = ${tenantId}
       ORDER BY c.created_at DESC
     `;
@@ -794,7 +794,7 @@ export const dbQmsComplaints = {
     const r = await sql`
       SELECT c.*, u.full_name AS created_by_name
       FROM qms_complaints c
-      LEFT JOIN users u ON u.id = c.created_by_id
+      LEFT JOIN users u ON u.id::text = c.created_by_id
       WHERE c.id = ${id} AND c.tenant_id = ${tenantId}
     `;
     return r.rows[0] ?? null;
@@ -845,7 +845,7 @@ export const dbQmsCoas = {
       SELECT c.*, l.lot_number, u.full_name AS generated_by_name
       FROM qms_coas c
       LEFT JOIN qms_lots l ON l.id = c.lot_id
-      LEFT JOIN users u ON u.id = c.generated_by_id
+      LEFT JOIN users u ON u.id::text = c.generated_by_id
       WHERE c.tenant_id = ${tenantId}
       ORDER BY c.issued_at DESC
     `;
@@ -857,7 +857,7 @@ export const dbQmsCoas = {
       SELECT c.*, l.lot_number, u.full_name AS generated_by_name
       FROM qms_coas c
       LEFT JOIN qms_lots l ON l.id = c.lot_id
-      LEFT JOIN users u ON u.id = c.generated_by_id
+      LEFT JOIN users u ON u.id::text = c.generated_by_id
       WHERE c.id = ${id} AND c.tenant_id = ${tenantId}
     `;
     return r.rows[0] ?? null;

@@ -48,5 +48,5 @@ export async function POST(request: NextRequest) {
 
   logActivity({ tenantId: auth.payload.tenantId!, userId: auth.payload.userId, role: auth.payload.role,
     action: "created", entityType: "ops_downtime_event", entityId: id, entityName: reason }).catch(() => {});
-  return NextResponse.json({ id }, { status: 201 });
+  return NextResponse.json({ id, durationMinutes: duration }, { status: 201 });
 }

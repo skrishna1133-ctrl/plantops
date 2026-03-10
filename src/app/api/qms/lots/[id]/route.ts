@@ -31,5 +31,5 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
   const lot = await dbQmsLots.getById(id, auth.payload.tenantId!);
   logActivity({ tenantId: auth.payload.tenantId!, userId: auth.payload.userId, role: auth.payload.role,
     action: "updated", entityType: "qms_lot", entityId: id, entityName: lot?.lot_number || id }).catch(() => {});
-  return NextResponse.json({ success: true });
+  return NextResponse.json(lot);
 }

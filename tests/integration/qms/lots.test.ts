@@ -91,10 +91,10 @@ describe("GET /api/qms/lots/[id]", () => {
   it("returns lot details", async () => {
     const req = await reqAs("quality_tech", `/api/qms/lots/${IDS.QMS_LOT_APPROVED}`);
     const res = await GET_ID(req, { params: Promise.resolve({ id: IDS.QMS_LOT_APPROVED }) });
-    const body = await expectStatus<{ id: string; status: string; lotNumber: string }>(res, 200);
+    const body = await expectStatus<{ id: string; status: string; lot_number: string }>(res, 200);
     expect(body.id).toBe(IDS.QMS_LOT_APPROVED);
     expect(body.status).toBe("approved");
-    expect(body.lotNumber).toBe("QMS-LOT-9003");
+    expect(body.lot_number).toBe("QMS-LOT-9003");
   });
 
   it("returns 404 for non-existent lot", async () => {

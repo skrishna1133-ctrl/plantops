@@ -872,7 +872,7 @@ export const dbCmmsChecklistSubmissions = {
       FROM cmms_checklist_submissions s
       LEFT JOIN cmms_checklist_templates t ON s.template_id = t.id
       LEFT JOIN cmms_machines m ON s.machine_id = m.id
-      LEFT JOIN users u ON s.submitted_by_id = u.id`;
+      LEFT JOIN users u ON s.submitted_by_id = u.id::text`;
 
     if (tenantId && filters?.machineId && filters?.hasFlags !== undefined) {
       result = await sql`${baseQuery} WHERE s.tenant_id = ${tenantId} AND s.machine_id = ${filters.machineId} AND s.has_flags = ${filters.hasFlags} ORDER BY s.submitted_at DESC`;
@@ -894,7 +894,7 @@ export const dbCmmsChecklistSubmissions = {
       FROM cmms_checklist_submissions s
       LEFT JOIN cmms_checklist_templates t ON s.template_id = t.id
       LEFT JOIN cmms_machines m ON s.machine_id = m.id
-      LEFT JOIN users u ON s.submitted_by_id = u.id
+      LEFT JOIN users u ON s.submitted_by_id = u.id::text
       WHERE s.id = ${id}`;
     if (!result.rows[0]) return null;
     const sub = mapChecklistSubmission(result.rows[0]);
@@ -941,7 +941,7 @@ export const dbCmmsChecklistSubmissions = {
       FROM cmms_checklist_submissions s
       LEFT JOIN cmms_checklist_templates t ON s.template_id = t.id
       LEFT JOIN cmms_machines m ON s.machine_id = m.id
-      LEFT JOIN users u ON s.submitted_by_id = u.id
+      LEFT JOIN users u ON s.submitted_by_id = u.id::text
       WHERE s.tenant_id = ${tenantId} AND s.has_flags = true
       ORDER BY s.submitted_at DESC`;
     return result.rows.map(mapChecklistSubmission);
@@ -1387,8 +1387,8 @@ export const dbCmmsWorkOrders = {
                u1.full_name AS assigned_to_name, u2.full_name AS created_by_name
         FROM cmms_work_orders wo
         LEFT JOIN cmms_machines m ON wo.machine_id = m.id
-        LEFT JOIN users u1 ON wo.assigned_to_id = u1.id
-        LEFT JOIN users u2 ON wo.created_by_id = u2.id
+        LEFT JOIN users u1 ON wo.assigned_to_id = u1.id::text
+        LEFT JOIN users u2 ON wo.created_by_id = u2.id::text
         WHERE wo.tenant_id = ${tenantId} AND wo.assigned_to_id = ${filters.assignedToId}
         ORDER BY wo.created_at DESC`;
     } else if (tenantId && filters?.status) {
@@ -1397,8 +1397,8 @@ export const dbCmmsWorkOrders = {
                u1.full_name AS assigned_to_name, u2.full_name AS created_by_name
         FROM cmms_work_orders wo
         LEFT JOIN cmms_machines m ON wo.machine_id = m.id
-        LEFT JOIN users u1 ON wo.assigned_to_id = u1.id
-        LEFT JOIN users u2 ON wo.created_by_id = u2.id
+        LEFT JOIN users u1 ON wo.assigned_to_id = u1.id::text
+        LEFT JOIN users u2 ON wo.created_by_id = u2.id::text
         WHERE wo.tenant_id = ${tenantId} AND wo.status = ${filters.status}
         ORDER BY wo.created_at DESC`;
     } else if (tenantId) {
@@ -1407,8 +1407,8 @@ export const dbCmmsWorkOrders = {
                u1.full_name AS assigned_to_name, u2.full_name AS created_by_name
         FROM cmms_work_orders wo
         LEFT JOIN cmms_machines m ON wo.machine_id = m.id
-        LEFT JOIN users u1 ON wo.assigned_to_id = u1.id
-        LEFT JOIN users u2 ON wo.created_by_id = u2.id
+        LEFT JOIN users u1 ON wo.assigned_to_id = u1.id::text
+        LEFT JOIN users u2 ON wo.created_by_id = u2.id::text
         WHERE wo.tenant_id = ${tenantId}
         ORDER BY wo.created_at DESC`;
     } else {
@@ -1417,8 +1417,8 @@ export const dbCmmsWorkOrders = {
                u1.full_name AS assigned_to_name, u2.full_name AS created_by_name
         FROM cmms_work_orders wo
         LEFT JOIN cmms_machines m ON wo.machine_id = m.id
-        LEFT JOIN users u1 ON wo.assigned_to_id = u1.id
-        LEFT JOIN users u2 ON wo.created_by_id = u2.id
+        LEFT JOIN users u1 ON wo.assigned_to_id = u1.id::text
+        LEFT JOIN users u2 ON wo.created_by_id = u2.id::text
         ORDER BY wo.created_at DESC`;
     }
     return result.rows.map(mapWorkOrder);
@@ -1430,8 +1430,8 @@ export const dbCmmsWorkOrders = {
              u1.full_name AS assigned_to_name, u2.full_name AS created_by_name
       FROM cmms_work_orders wo
       LEFT JOIN cmms_machines m ON wo.machine_id = m.id
-      LEFT JOIN users u1 ON wo.assigned_to_id = u1.id
-      LEFT JOIN users u2 ON wo.created_by_id = u2.id
+      LEFT JOIN users u1 ON wo.assigned_to_id = u1.id::text
+      LEFT JOIN users u2 ON wo.created_by_id = u2.id::text
       WHERE wo.id = ${id}`;
     return result.rows[0] ? mapWorkOrder(result.rows[0]) : null;
   },
@@ -1549,7 +1549,7 @@ export const dbCmmsBreakdownReports = {
                (SELECT COUNT(*) FROM cmms_work_orders wo WHERE wo.breakdown_report_id = br.id) > 0 AS has_work_order
         FROM cmms_breakdown_reports br
         LEFT JOIN cmms_machines m ON br.machine_id = m.id
-        LEFT JOIN users u ON br.reported_by_id = u.id
+        LEFT JOIN users u ON br.reported_by_id = u.id::text::text
         WHERE br.tenant_id = ${tenantId} AND br.reported_by_id = ${reportedById}
         ORDER BY br.created_at DESC`;
     } else if (tenantId) {
@@ -1559,7 +1559,7 @@ export const dbCmmsBreakdownReports = {
                (SELECT COUNT(*) FROM cmms_work_orders wo WHERE wo.breakdown_report_id = br.id) > 0 AS has_work_order
         FROM cmms_breakdown_reports br
         LEFT JOIN cmms_machines m ON br.machine_id = m.id
-        LEFT JOIN users u ON br.reported_by_id = u.id
+        LEFT JOIN users u ON br.reported_by_id = u.id::text::text
         WHERE br.tenant_id = ${tenantId}
         ORDER BY br.created_at DESC`;
     } else {
@@ -1569,7 +1569,7 @@ export const dbCmmsBreakdownReports = {
                (SELECT COUNT(*) FROM cmms_work_orders wo WHERE wo.breakdown_report_id = br.id) > 0 AS has_work_order
         FROM cmms_breakdown_reports br
         LEFT JOIN cmms_machines m ON br.machine_id = m.id
-        LEFT JOIN users u ON br.reported_by_id = u.id
+        LEFT JOIN users u ON br.reported_by_id = u.id::text::text
         ORDER BY br.created_at DESC`;
     }
     return result.rows.map(mapBreakdown);
@@ -1582,7 +1582,7 @@ export const dbCmmsBreakdownReports = {
              (SELECT COUNT(*) FROM cmms_work_orders wo WHERE wo.breakdown_report_id = br.id) > 0 AS has_work_order
       FROM cmms_breakdown_reports br
       LEFT JOIN cmms_machines m ON br.machine_id = m.id
-      LEFT JOIN users u ON br.reported_by_id = u.id
+      LEFT JOIN users u ON br.reported_by_id = u.id::text
       WHERE br.id = ${id}`;
     return result.rows[0] ? mapBreakdown(result.rows[0]) : null;
   },

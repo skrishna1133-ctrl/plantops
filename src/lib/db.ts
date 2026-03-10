@@ -220,7 +220,7 @@ async function initTables() {
   await sql`
     INSERT INTO tenants (id, name, code, active, created_at)
     VALUES (${FPI_ID}, 'FPI', 'FPI', true, ${now})
-    ON CONFLICT (code) DO NOTHING
+    ON CONFLICT DO NOTHING
   `;
 
   // ── Migrate existing data to FPI tenant ──

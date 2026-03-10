@@ -27,10 +27,10 @@ describe("GET /api/maintenance/work-orders", () => {
   it("maintenance_tech only sees their own work orders", async () => {
     const req = await reqAs("maintenance_tech", "/api/maintenance/work-orders");
     const res = await GET(req);
-    const body = await expectStatus<{ id: string; assigned_to_id?: string }[]>(res, 200);
+    const body = await expectStatus<{ id: string; assignedToId?: string }[]>(res, 200);
     // The seeded WO is assigned to USER_MTECH
-    const own = body.filter(w => w.assigned_to_id === IDS.USER_MTECH);
-    expect(body.every(w => w.assigned_to_id === IDS.USER_MTECH)).toBe(true);
+    const own = body.filter(w => w.assignedToId === IDS.USER_MTECH);
+    expect(body.every(w => w.assignedToId === IDS.USER_MTECH)).toBe(true);
   });
 
   it("filters by status", async () => {
