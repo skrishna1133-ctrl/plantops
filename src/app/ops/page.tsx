@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import {
   Loader2, LogOut, Factory, Truck, Package,
   Settings, ChevronRight, ArrowLeft,
-  ClipboardList, ArrowDownToLine, BarChart3,
+  ClipboardList, ArrowDownToLine, BarChart3, Warehouse,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -199,6 +199,18 @@ export default function OpsPage() {
                 <div>
                   <p className="font-medium text-sm">Lots</p>
                   <p className="text-xs text-muted-foreground">Material lots</p>
+                </div>
+                <ChevronRight size={16} className="ml-auto text-muted-foreground" />
+              </CardContent>
+            </Card>
+          </Link>
+          <Link href="/ops/inventory">
+            <Card className="cursor-pointer hover:bg-muted/30 transition-colors border-2">
+              <CardContent className="p-4 flex items-center gap-3">
+                <Warehouse size={22} className="text-blue-600 shrink-0" />
+                <div>
+                  <p className="font-medium text-sm">Inventory</p>
+                  <p className="text-xs text-muted-foreground">On-hand stock</p>
                 </div>
                 <ChevronRight size={16} className="ml-auto text-muted-foreground" />
               </CardContent>

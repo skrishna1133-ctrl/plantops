@@ -1,0 +1,8 @@
+{
+  "crons": [
+    {
+      "path": "/api/ops/inventory/snapshot",
+      "schedule": "0 23 * * *"
+    }
+  ]
+}

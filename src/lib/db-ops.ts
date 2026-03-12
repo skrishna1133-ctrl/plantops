@@ -364,6 +364,31 @@ export async function initOpsTables(): Promise<void> {
     )
   `;
   await sql`CREATE INDEX IF NOT EXISTS idx_ops_docs_tenant ON ops_shipment_documents(tenant_id)`;
+
+  // ── Inventory Snapshots ───────────────────────────────────────────────
+  // Nightly snapshot of on-hand inventory per material type (cron job)
+  await sql`
+    CREATE TABLE IF NOT EXISTS ops_inventory_snapshots (
+      id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      tenant_id     UUID NOT NULL REFERENCES tenants(id),
+      snapshot_date DATE NOT NULL,
+      material_type TEXT NOT NULL,
+      material_name TEXT NOT NULL,
+      weight_lbs    NUMERIC(12,3) NOT NULL DEFAULT 0,
+      lot_count     INTEGER NOT NULL DEFAULT 0,
+      created_at    TIMESTAMPTZ DEFAULT now(),
+      UNIQUE(tenant_id, snapshot_date, material_type)
+    )
+  `;
+  await sql`
+    CREATE INDEX IF NOT EXISTS idx_inv_snapshots_tenant_date
+      ON ops_inventory_snapshots(tenant_id, snapshot_date)
+  `;
+
+  // Add capacity_lbs to ops_locations if not already present
+  await sql`
+    ALTER TABLE ops_locations ADD COLUMN IF NOT EXISTS capacity_lbs FLOAT
+  `;
 }
 
 // ─────────────────────────────────────────────
