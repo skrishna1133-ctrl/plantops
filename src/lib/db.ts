@@ -217,18 +217,21 @@ async function initTables() {
   await sql`ALTER TABLE document_folders ADD COLUMN IF NOT EXISTS tenant_id UUID`;
   await sql`ALTER TABLE instruction_documents ADD COLUMN IF NOT EXISTS tenant_id UUID`;
 
-  // ── Seed FPI tenant ──
+  // ── Seed tenants ──
   const now = new Date().toISOString();
   await sql`
     INSERT INTO tenants (id, name, code, active, created_at)
-    VALUES (${FPI_ID}, 'FPI', 'FPI', true, ${now})
+    VALUES (${FPI_ID}, 'TEST', 'TEST', true, ${now})
     ON CONFLICT DO NOTHING
   `;
   await sql`
     INSERT INTO tenants (id, name, code, active, created_at)
-    VALUES (${FPFI_ID}, 'Frankfort Plastics', 'FPFI', true, ${now})
+    VALUES (${FPFI_ID}, 'FPI', 'FPI', true, ${now})
     ON CONFLICT DO NOTHING
   `;
+  // Rename tenants (idempotent — safe to run on every init)
+  await sql`UPDATE tenants SET name = 'TEST', code = 'TEST' WHERE id = ${FPI_ID}`;
+  await sql`UPDATE tenants SET name = 'FPI',  code = 'FPI'  WHERE id = ${FPFI_ID}`;
 
   // ── Migrate existing data to FPI tenant ──
   await sql`UPDATE incidents SET tenant_id = ${FPI_ID} WHERE tenant_id IS NULL`;
