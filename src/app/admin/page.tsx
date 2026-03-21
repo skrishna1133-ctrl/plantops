@@ -16,8 +16,6 @@ import {
   FlaskConical,
   Users,
   Package,
-  Globe,
-  Building2,
   Activity,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -51,10 +49,8 @@ import ChecklistsTab from "@/components/admin/checklists-tab";
 import QualityDocumentsTab from "@/components/admin/quality-documents-tab";
 import UsersTab from "@/components/admin/users-tab";
 import ShipmentsTab from "@/components/admin/shipments-tab";
-import SuperAdminUsersTab from "@/components/admin/super-admin-users-tab";
 import ActivityLogTab from "@/components/admin/activity-log-tab";
 import { ThemeToggle } from "@/components/theme-toggle";
-import { CompanyBadge } from "@/components/company-badge";
 
 const criticalityColors: Record<string, string> = {
   minor: "bg-yellow-500/20 text-yellow-400 border-yellow-500/30",
@@ -86,13 +82,16 @@ const plantLabels: Record<string, string> = {
   "plant-b": "Plant B",
 };
 
-type AdminTab = "incidents" | "checklists" | "quality" | "users" | "shipments" | "all-users" | "activity-log";
+type AdminTab = "incidents" | "checklists" | "quality" | "users" | "shipments" | "activity-log";
 
-interface Tenant {
-  id: string;
-  name: string;
-  code: string;
-}
+const tabs: { id: AdminTab; label: string; icon: React.ElementType }[] = [
+  { id: "incidents",    label: "Incidents",    icon: AlertTriangle },
+  { id: "checklists",  label: "Checklists",   icon: ClipboardList },
+  { id: "quality",     label: "Quality",      icon: FlaskConical },
+  { id: "users",       label: "Users",        icon: Users },
+  { id: "shipments",   label: "Shipments",    icon: Package },
+  { id: "activity-log",label: "Activity Log", icon: Activity },
+];
 
 export default function AdminPage() {
   const [activeTab, setActiveTab] = useState<AdminTab>("incidents");
@@ -101,46 +100,13 @@ export default function AdminPage() {
   const [filterPlant, setFilterPlant] = useState<string>("all");
   const [filterCriticality, setFilterCriticality] = useState<string>("all");
   const [filterStatus, setFilterStatus] = useState<string>("all");
-  const [selectedIncident, setSelectedIncident] =
-    useState<IncidentReport | null>(null);
+  const [selectedIncident, setSelectedIncident] = useState<IncidentReport | null>(null);
   const [photoPreview, setPhotoPreview] = useState<string | null>(null);
-
-  // Super admin state
-  const [isSuperAdmin, setIsSuperAdmin] = useState(false);
-  const [tenantName, setTenantName] = useState<string | null>(null);
-  const [tenantLogoUrl, setTenantLogoUrl] = useState<string | null>(null);
-  const [tenants, setTenants] = useState<Tenant[]>([]);
-  const [viewAsTenant, setViewAsTenant] = useState<string>("all");
-
-  const handleTenantChange = (tenantId: string) => {
-    setViewAsTenant(tenantId);
-    setActiveTab(tenantId !== "all" ? "incidents" : "all-users");
-  };
-
-  const tenantSelected = isSuperAdmin && viewAsTenant !== "all";
 
   const router = useRouter();
 
-  // Fetch session info on mount
   useEffect(() => {
-    fetch("/api/auth")
-      .then((r) => r.json())
-      .then((data) => {
-        if (data.role === "super_admin") {
-          setIsSuperAdmin(true);
-          setTenantName(null);
-          setActiveTab("all-users");
-          // Fetch tenants for switcher
-          fetch("/api/tenants")
-            .then((r) => r.json())
-            .then((t) => { if (Array.isArray(t)) setTenants(t); })
-            .catch(() => {});
-        } else {
-          setTenantName(data.tenantName || null);
-          setTenantLogoUrl(data.tenantLogoUrl ?? null);
-        }
-      })
-      .catch(() => {});
+    fetch("/api/auth").catch(() => {});
   }, []);
 
   const handleLogout = async () => {
@@ -152,8 +118,7 @@ export default function AdminPage() {
   const fetchIncidents = useCallback(async () => {
     setLoading(true);
     try {
-      const url = tenantSelected ? `/api/incidents?viewAs=${viewAsTenant}` : "/api/incidents";
-      const res = await fetch(url);
+      const res = await fetch("/api/incidents");
       const data = await res.json();
       setIncidents(data);
     } catch (error) {
@@ -161,7 +126,7 @@ export default function AdminPage() {
     } finally {
       setLoading(false);
     }
-  }, [tenantSelected, viewAsTenant]);
+  }, []);
 
   useEffect(() => {
     fetchIncidents();
@@ -177,16 +142,12 @@ export default function AdminPage() {
       if (res.ok) {
         setIncidents((prev) =>
           prev.map((inc) =>
-            inc.id === id
-              ? { ...inc, status: status as IncidentReport["status"] }
-              : inc
+            inc.id === id ? { ...inc, status: status as IncidentReport["status"] } : inc
           )
         );
         if (selectedIncident?.id === id) {
           setSelectedIncident((prev) =>
-            prev
-              ? { ...prev, status: status as IncidentReport["status"] }
-              : null
+            prev ? { ...prev, status: status as IncidentReport["status"] } : null
           );
         }
       }
@@ -210,8 +171,7 @@ export default function AdminPage() {
 
   const filtered = incidents.filter((inc) => {
     if (filterPlant !== "all" && inc.plant !== filterPlant) return false;
-    if (filterCriticality !== "all" && inc.criticality !== filterCriticality)
-      return false;
+    if (filterCriticality !== "all" && inc.criticality !== filterCriticality) return false;
     if (filterStatus !== "all" && inc.status !== filterStatus) return false;
     return true;
   });
@@ -224,27 +184,6 @@ export default function AdminPage() {
     critical: incidents.filter((i) => i.criticality === "critical").length,
   };
 
-  const tabs = isSuperAdmin
-    ? [
-        ...(tenantSelected ? [
-          { id: "incidents" as AdminTab, label: "Incidents", icon: AlertTriangle },
-          { id: "checklists" as AdminTab, label: "Checklists", icon: ClipboardList },
-          { id: "quality" as AdminTab, label: "Quality", icon: FlaskConical },
-          { id: "users" as AdminTab, label: "Users", icon: Users },
-          { id: "shipments" as AdminTab, label: "Shipments", icon: Package },
-          { id: "activity-log" as AdminTab, label: "Activity Log", icon: Activity },
-        ] : []),
-        { id: "all-users" as AdminTab, label: "All Users", icon: Globe },
-      ]
-    : [
-        { id: "incidents" as AdminTab, label: "Incidents", icon: AlertTriangle },
-        { id: "checklists" as AdminTab, label: "Checklists", icon: ClipboardList },
-        { id: "quality" as AdminTab, label: "Quality", icon: FlaskConical },
-        { id: "users" as AdminTab, label: "Users", icon: Users },
-        { id: "shipments" as AdminTab, label: "Shipments", icon: Package },
-        { id: "activity-log" as AdminTab, label: "Activity Log", icon: Activity },
-      ];
-
   return (
     <div className="min-h-screen bg-background">
       {/* Header */}
@@ -256,57 +195,18 @@ export default function AdminPage() {
                 <ArrowLeft size={20} />
               </Button>
             </Link>
-            {!isSuperAdmin && tenantName ? (
-              <CompanyBadge name={tenantName} logoUrl={tenantLogoUrl} className="w-10 h-10 text-sm" />
-            ) : (
-              <div className="w-10 h-10 rounded-lg bg-orange-500 flex items-center justify-center">
-                <span className="text-white font-bold text-lg">P</span>
-              </div>
-            )}
+            <div className="w-10 h-10 rounded-lg bg-orange-500 flex items-center justify-center">
+              <span className="text-white font-bold text-lg">P</span>
+            </div>
             <div>
-              <h1 className="text-xl font-bold tracking-tight">
-                Admin Dashboard
-              </h1>
-              <p className="text-xs text-muted-foreground">
-                {isSuperAdmin
-                  ? "Platform Administration"
-                  : tenantName
-                  ? `${tenantName} — Operations Management`
-                  : "Plant Operations Management"}
-              </p>
+              <h1 className="text-xl font-bold tracking-tight">Admin Dashboard</h1>
+              <p className="text-xs text-muted-foreground">Plant Operations Management</p>
             </div>
           </div>
           <div className="flex items-center gap-2">
-            {/* Tenant switcher for super admin */}
-            {isSuperAdmin && tenants.length > 0 && (
-              <div className="flex items-center gap-2">
-                <Building2 size={14} className="text-muted-foreground" />
-                <Select value={viewAsTenant} onValueChange={handleTenantChange}>
-                  <SelectTrigger className="w-[160px] h-8 text-xs">
-                    <SelectValue placeholder="View as tenant" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All Tenants</SelectItem>
-                    {tenants.map((t) => (
-                      <SelectItem key={t.id} value={t.id}>
-                        {t.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            )}
             {activeTab === "incidents" && (
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={fetchIncidents}
-                disabled={loading}
-              >
-                <RefreshCw
-                  size={14}
-                  className={`mr-2 ${loading ? "animate-spin" : ""}`}
-                />
+              <Button variant="outline" size="sm" onClick={fetchIncidents} disabled={loading}>
+                <RefreshCw size={14} className={`mr-2 ${loading ? "animate-spin" : ""}`} />
                 Refresh
               </Button>
             )}
@@ -347,221 +247,143 @@ export default function AdminPage() {
       </div>
 
       <main className="max-w-7xl mx-auto px-4 py-6 space-y-6">
-        {/* Checklists Tab */}
-        {activeTab === "checklists" && <ChecklistsTab viewAs={tenantSelected ? viewAsTenant : undefined} />}
+        {activeTab === "checklists"   && <ChecklistsTab />}
+        {activeTab === "quality"      && <QualityDocumentsTab />}
+        {activeTab === "users"        && <UsersTab />}
+        {activeTab === "shipments"    && <ShipmentsTab />}
+        {activeTab === "activity-log" && <ActivityLogTab />}
 
-        {/* Quality Tab */}
-        {activeTab === "quality" && <QualityDocumentsTab viewAs={tenantSelected ? viewAsTenant : undefined} />}
-
-        {/* Users Tab */}
-        {activeTab === "users" && <UsersTab viewAs={tenantSelected ? viewAsTenant : undefined} />}
-
-        {/* Shipments Tab */}
-        {activeTab === "shipments" && <ShipmentsTab viewAs={tenantSelected ? viewAsTenant : undefined} />}
-
-        {/* All Users Tab (super_admin only) */}
-        {activeTab === "all-users" && isSuperAdmin && <SuperAdminUsersTab />}
-
-        {/* Activity Log Tab */}
-        {activeTab === "activity-log" && <ActivityLogTab viewAs={tenantSelected ? viewAsTenant : undefined} />}
-
-        {/* Incidents Tab */}
         {activeTab === "incidents" && <>
-        {/* Stats Cards */}
-        <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
+          {/* Stats Cards */}
+          <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
+            <Card><CardContent className="p-4 text-center"><p className="text-2xl font-bold">{stats.total}</p><p className="text-xs text-muted-foreground">Total</p></CardContent></Card>
+            <Card className="border-blue-500/30"><CardContent className="p-4 text-center"><p className="text-2xl font-bold text-blue-400">{stats.open}</p><p className="text-xs text-muted-foreground">Open</p></CardContent></Card>
+            <Card className="border-amber-500/30"><CardContent className="p-4 text-center"><p className="text-2xl font-bold text-amber-400">{stats.inProgress}</p><p className="text-xs text-muted-foreground">In Progress</p></CardContent></Card>
+            <Card className="border-green-500/30"><CardContent className="p-4 text-center"><p className="text-2xl font-bold text-green-400">{stats.resolved}</p><p className="text-xs text-muted-foreground">Resolved</p></CardContent></Card>
+            <Card className="border-red-500/30"><CardContent className="p-4 text-center"><p className="text-2xl font-bold text-red-400">{stats.critical}</p><p className="text-xs text-muted-foreground">Critical</p></CardContent></Card>
+          </div>
+
+          {/* Filters */}
           <Card>
-            <CardContent className="p-4 text-center">
-              <p className="text-2xl font-bold">{stats.total}</p>
-              <p className="text-xs text-muted-foreground">Total</p>
-            </CardContent>
-          </Card>
-          <Card className="border-blue-500/30">
-            <CardContent className="p-4 text-center">
-              <p className="text-2xl font-bold text-blue-400">{stats.open}</p>
-              <p className="text-xs text-muted-foreground">Open</p>
-            </CardContent>
-          </Card>
-          <Card className="border-amber-500/30">
-            <CardContent className="p-4 text-center">
-              <p className="text-2xl font-bold text-amber-400">
-                {stats.inProgress}
-              </p>
-              <p className="text-xs text-muted-foreground">In Progress</p>
-            </CardContent>
-          </Card>
-          <Card className="border-green-500/30">
-            <CardContent className="p-4 text-center">
-              <p className="text-2xl font-bold text-green-400">
-                {stats.resolved}
-              </p>
-              <p className="text-xs text-muted-foreground">Resolved</p>
-            </CardContent>
-          </Card>
-          <Card className="border-red-500/30">
-            <CardContent className="p-4 text-center">
-              <p className="text-2xl font-bold text-red-400">
-                {stats.critical}
-              </p>
-              <p className="text-xs text-muted-foreground">Critical</p>
-            </CardContent>
-          </Card>
-        </div>
-
-        {/* Filters */}
-        <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center gap-2 mb-3">
-              <Filter size={16} className="text-muted-foreground" />
-              <span className="text-sm font-medium">Filters</span>
-            </div>
-            <div className="flex flex-wrap gap-3">
-              <Select value={filterPlant} onValueChange={setFilterPlant}>
-                <SelectTrigger className="w-[140px]">
-                  <SelectValue placeholder="Plant" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Plants</SelectItem>
-                  <SelectItem value="plant-a">Plant A</SelectItem>
-                  <SelectItem value="plant-b">Plant B</SelectItem>
-                </SelectContent>
-              </Select>
-
-              <Select
-                value={filterCriticality}
-                onValueChange={setFilterCriticality}
-              >
-                <SelectTrigger className="w-[140px]">
-                  <SelectValue placeholder="Criticality" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Levels</SelectItem>
-                  <SelectItem value="minor">Minor</SelectItem>
-                  <SelectItem value="major">Major</SelectItem>
-                  <SelectItem value="critical">Critical</SelectItem>
-                </SelectContent>
-              </Select>
-
-              <Select value={filterStatus} onValueChange={setFilterStatus}>
-                <SelectTrigger className="w-[140px]">
-                  <SelectValue placeholder="Status" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Status</SelectItem>
-                  <SelectItem value="open">Open</SelectItem>
-                  <SelectItem value="in_progress">In Progress</SelectItem>
-                  <SelectItem value="resolved">Resolved</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Incidents Table */}
-        <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="text-lg">
-              Incidents ({filtered.length})
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="p-0">
-            {filtered.length === 0 ? (
-              <div className="flex flex-col items-center justify-center py-16 text-muted-foreground">
-                <AlertTriangle size={48} className="mb-4 opacity-30" />
-                <p className="text-lg font-medium">No incidents found</p>
-                <p className="text-sm">
-                  {incidents.length === 0
-                    ? "No incidents have been reported yet."
-                    : "No incidents match the current filters."}
-                </p>
+            <CardContent className="p-4">
+              <div className="flex items-center gap-2 mb-3">
+                <Filter size={16} className="text-muted-foreground" />
+                <span className="text-sm font-medium">Filters</span>
               </div>
-            ) : (
-              <div className="overflow-x-auto">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead className="w-[130px]">Ticket ID</TableHead>
-                      <TableHead>Reporter</TableHead>
-                      <TableHead>Plant</TableHead>
-                      <TableHead>Category</TableHead>
-                      <TableHead>Criticality</TableHead>
-                      <TableHead>Status</TableHead>
-                      <TableHead>Photo</TableHead>
-                      <TableHead>Date</TableHead>
-                      <TableHead className="w-[100px]">Actions</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {filtered.map((incident) => (
-                      <TableRow
-                        key={incident.id}
-                        className="cursor-pointer hover:bg-muted/50"
-                        onClick={() => setSelectedIncident(incident)}
-                      >
-                        <TableCell className="font-mono text-sm font-medium">
-                          {incident.ticketId}
-                        </TableCell>
-                        <TableCell>{incident.reporterName}</TableCell>
-                        <TableCell>
-                          {plantLabels[incident.plant] || incident.plant}
-                        </TableCell>
-                        <TableCell>
-                          {categoryLabels[incident.category] ||
-                            incident.category}
-                        </TableCell>
-                        <TableCell>
-                          <Badge
-                            variant="outline"
-                            className={
-                              criticalityColors[incident.criticality] || ""
-                            }
-                          >
-                            {incident.criticality.charAt(0).toUpperCase() +
-                              incident.criticality.slice(1)}
-                          </Badge>
-                        </TableCell>
-                        <TableCell>
-                          <Badge
-                            variant="outline"
-                            className={statusColors[incident.status] || ""}
-                          >
-                            {statusLabels[incident.status] || incident.status}
-                          </Badge>
-                        </TableCell>
-                        <TableCell>
-                          {incident.photoUrl ? (
-                            <ImageIcon size={16} className="text-green-400" />
-                          ) : (
-                            <span className="text-muted-foreground text-xs">-</span>
-                          )}
-                        </TableCell>
-                        <TableCell className="text-sm text-muted-foreground">
-                          {new Date(incident.incidentDate).toLocaleDateString()}
-                        </TableCell>
-                        <TableCell>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-8 w-8 text-red-400 hover:text-red-300 hover:bg-red-500/10"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              deleteIncident(incident.id);
-                            }}
-                          >
-                            <Trash2 size={14} />
-                          </Button>
-                        </TableCell>
+              <div className="flex flex-wrap gap-3">
+                <Select value={filterPlant} onValueChange={setFilterPlant}>
+                  <SelectTrigger className="w-[140px]"><SelectValue placeholder="Plant" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Plants</SelectItem>
+                    <SelectItem value="plant-a">Plant A</SelectItem>
+                    <SelectItem value="plant-b">Plant B</SelectItem>
+                  </SelectContent>
+                </Select>
+                <Select value={filterCriticality} onValueChange={setFilterCriticality}>
+                  <SelectTrigger className="w-[140px]"><SelectValue placeholder="Criticality" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Levels</SelectItem>
+                    <SelectItem value="minor">Minor</SelectItem>
+                    <SelectItem value="major">Major</SelectItem>
+                    <SelectItem value="critical">Critical</SelectItem>
+                  </SelectContent>
+                </Select>
+                <Select value={filterStatus} onValueChange={setFilterStatus}>
+                  <SelectTrigger className="w-[140px]"><SelectValue placeholder="Status" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Status</SelectItem>
+                    <SelectItem value="open">Open</SelectItem>
+                    <SelectItem value="in_progress">In Progress</SelectItem>
+                    <SelectItem value="resolved">Resolved</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Incidents Table */}
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-lg">Incidents ({filtered.length})</CardTitle>
+            </CardHeader>
+            <CardContent className="p-0">
+              {filtered.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-16 text-muted-foreground">
+                  <AlertTriangle size={48} className="mb-4 opacity-30" />
+                  <p className="text-lg font-medium">No incidents found</p>
+                  <p className="text-sm">
+                    {incidents.length === 0 ? "No incidents have been reported yet." : "No incidents match the current filters."}
+                  </p>
+                </div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead className="w-[130px]">Ticket ID</TableHead>
+                        <TableHead>Reporter</TableHead>
+                        <TableHead>Plant</TableHead>
+                        <TableHead>Category</TableHead>
+                        <TableHead>Criticality</TableHead>
+                        <TableHead>Status</TableHead>
+                        <TableHead>Photo</TableHead>
+                        <TableHead>Date</TableHead>
+                        <TableHead className="w-[100px]">Actions</TableHead>
                       </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </div>
-            )}
-          </CardContent>
-        </Card>
+                    </TableHeader>
+                    <TableBody>
+                      {filtered.map((incident) => (
+                        <TableRow
+                          key={incident.id}
+                          className="cursor-pointer hover:bg-muted/50"
+                          onClick={() => setSelectedIncident(incident)}
+                        >
+                          <TableCell className="font-mono text-sm font-medium">{incident.ticketId}</TableCell>
+                          <TableCell>{incident.reporterName}</TableCell>
+                          <TableCell>{plantLabels[incident.plant] || incident.plant}</TableCell>
+                          <TableCell>{categoryLabels[incident.category] || incident.category}</TableCell>
+                          <TableCell>
+                            <Badge variant="outline" className={criticalityColors[incident.criticality] || ""}>
+                              {incident.criticality.charAt(0).toUpperCase() + incident.criticality.slice(1)}
+                            </Badge>
+                          </TableCell>
+                          <TableCell>
+                            <Badge variant="outline" className={statusColors[incident.status] || ""}>
+                              {statusLabels[incident.status] || incident.status}
+                            </Badge>
+                          </TableCell>
+                          <TableCell>
+                            {incident.photoUrl ? (
+                              <ImageIcon size={16} className="text-green-400" />
+                            ) : (
+                              <span className="text-muted-foreground text-xs">-</span>
+                            )}
+                          </TableCell>
+                          <TableCell className="text-sm text-muted-foreground">
+                            {new Date(incident.incidentDate).toLocaleDateString()}
+                          </TableCell>
+                          <TableCell>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-8 w-8 text-red-400 hover:text-red-300 hover:bg-red-500/10"
+                              onClick={(e) => { e.stopPropagation(); deleteIncident(incident.id); }}
+                            >
+                              <Trash2 size={14} />
+                            </Button>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              )}
+            </CardContent>
+          </Card>
         </>}
       </main>
 
-      {/* Photo Preview Popup */}
+      {/* Photo Preview */}
       {photoPreview && (
         <div
           className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-sm"
@@ -586,10 +408,7 @@ export default function AdminPage() {
       <Dialog
         open={!!selectedIncident}
         onOpenChange={(open) => {
-          if (!open && photoPreview) {
-            setPhotoPreview(null);
-            return;
-          }
+          if (!open && photoPreview) { setPhotoPreview(null); return; }
           if (!open) setSelectedIncident(null);
         }}
       >
@@ -598,17 +417,9 @@ export default function AdminPage() {
             <>
               <DialogHeader>
                 <DialogTitle className="flex items-center gap-3">
-                  <span className="font-mono text-base">
-                    {selectedIncident.ticketId}
-                  </span>
-                  <Badge
-                    variant="outline"
-                    className={
-                      criticalityColors[selectedIncident.criticality] || ""
-                    }
-                  >
-                    {selectedIncident.criticality.charAt(0).toUpperCase() +
-                      selectedIncident.criticality.slice(1)}
+                  <span className="font-mono text-base">{selectedIncident.ticketId}</span>
+                  <Badge variant="outline" className={criticalityColors[selectedIncident.criticality] || ""}>
+                    {selectedIncident.criticality.charAt(0).toUpperCase() + selectedIncident.criticality.slice(1)}
                   </Badge>
                 </DialogTitle>
                 <DialogDescription>Incident details and management</DialogDescription>
@@ -618,50 +429,32 @@ export default function AdminPage() {
                 <div className="grid grid-cols-2 gap-4 text-sm">
                   <div>
                     <p className="text-muted-foreground mb-1">Reporter</p>
-                    <p className="font-medium">
-                      {selectedIncident.reporterName}
-                    </p>
+                    <p className="font-medium">{selectedIncident.reporterName}</p>
                   </div>
                   <div>
                     <p className="text-muted-foreground mb-1">Plant</p>
-                    <p className="font-medium">
-                      {plantLabels[selectedIncident.plant] ||
-                        selectedIncident.plant}
-                    </p>
+                    <p className="font-medium">{plantLabels[selectedIncident.plant] || selectedIncident.plant}</p>
                   </div>
                   <div>
                     <p className="text-muted-foreground mb-1">Category</p>
-                    <p className="font-medium">
-                      {categoryLabels[selectedIncident.category] ||
-                        selectedIncident.category}
-                    </p>
+                    <p className="font-medium">{categoryLabels[selectedIncident.category] || selectedIncident.category}</p>
                   </div>
                   <div>
                     <p className="text-muted-foreground mb-1">Incident Date</p>
-                    <p className="font-medium">
-                      {new Date(
-                        selectedIncident.incidentDate
-                      ).toLocaleString()}
-                    </p>
+                    <p className="font-medium">{new Date(selectedIncident.incidentDate).toLocaleString()}</p>
                   </div>
                 </div>
 
                 <Separator />
 
                 <div>
-                  <p className="text-sm text-muted-foreground mb-1">
-                    Description
-                  </p>
-                  <p className="text-sm bg-muted/50 rounded-lg p-3">
-                    {selectedIncident.description}
-                  </p>
+                  <p className="text-sm text-muted-foreground mb-1">Description</p>
+                  <p className="text-sm bg-muted/50 rounded-lg p-3">{selectedIncident.description}</p>
                 </div>
 
                 {selectedIncident.photoUrl && (
                   <div>
-                    <p className="text-sm text-muted-foreground mb-1">
-                      Photo Evidence
-                    </p>
+                    <p className="text-sm text-muted-foreground mb-1">Photo Evidence</p>
                     <div
                       className="relative cursor-pointer group rounded-lg overflow-hidden border border-border"
                       onClick={() => setPhotoPreview(selectedIncident.photoUrl!)}
@@ -684,46 +477,27 @@ export default function AdminPage() {
                 <Separator />
 
                 <div>
-                  <p className="text-sm text-muted-foreground mb-2">
-                    Update Status
-                  </p>
+                  <p className="text-sm text-muted-foreground mb-2">Update Status</p>
                   <div className="flex gap-2">
-                    {(["open", "in_progress", "resolved"] as const).map(
-                      (status) => (
-                        <Button
-                          key={status}
-                          size="sm"
-                          variant={
-                            selectedIncident.status === status
-                              ? "default"
-                              : "outline"
-                          }
-                          onClick={() =>
-                            updateStatus(selectedIncident.id, status)
-                          }
-                          className={
-                            selectedIncident.status === status
-                              ? ""
-                              : "opacity-60"
-                          }
-                        >
-                          {statusLabels[status]}
-                        </Button>
-                      )
-                    )}
+                    {(["open", "in_progress", "resolved"] as const).map((status) => (
+                      <Button
+                        key={status}
+                        size="sm"
+                        variant={selectedIncident.status === status ? "default" : "outline"}
+                        onClick={() => updateStatus(selectedIncident.id, status)}
+                        className={selectedIncident.status === status ? "" : "opacity-60"}
+                      >
+                        {statusLabels[status]}
+                      </Button>
+                    ))}
                   </div>
                 </div>
 
                 <div className="flex justify-between items-center pt-2">
                   <p className="text-xs text-muted-foreground">
-                    Reported:{" "}
-                    {new Date(selectedIncident.createdAt).toLocaleString()}
+                    Reported: {new Date(selectedIncident.createdAt).toLocaleString()}
                   </p>
-                  <Button
-                    variant="destructive"
-                    size="sm"
-                    onClick={() => deleteIncident(selectedIncident.id)}
-                  >
+                  <Button variant="destructive" size="sm" onClick={() => deleteIncident(selectedIncident.id)}>
                     <Trash2 size={14} className="mr-2" />
                     Delete
                   </Button>

@@ -28,7 +28,6 @@ import type {
 import { getFlags } from "./flags";
 
 const FPI_ID = "00000000-0000-0000-0000-000000000001";
-const FPFI_ID = "00000000-0000-0000-0000-000000000002";
 
 // ─── Table Initialization ───
 
@@ -217,21 +216,13 @@ async function initTables() {
   await sql`ALTER TABLE document_folders ADD COLUMN IF NOT EXISTS tenant_id UUID`;
   await sql`ALTER TABLE instruction_documents ADD COLUMN IF NOT EXISTS tenant_id UUID`;
 
-  // ── Seed tenants ──
+  // ── Seed FPI tenant ──
   const now = new Date().toISOString();
   await sql`
     INSERT INTO tenants (id, name, code, active, created_at)
-    VALUES (${FPI_ID}, 'TEST', 'TEST', true, ${now})
+    VALUES (${FPI_ID}, 'FPI', 'FPI', true, ${now})
     ON CONFLICT DO NOTHING
   `;
-  await sql`
-    INSERT INTO tenants (id, name, code, active, created_at)
-    VALUES (${FPFI_ID}, 'FPI', 'FPI', true, ${now})
-    ON CONFLICT DO NOTHING
-  `;
-  // Rename tenants (idempotent — safe to run on every init)
-  await sql`UPDATE tenants SET name = 'TEST', code = 'TEST' WHERE id = ${FPI_ID}`;
-  await sql`UPDATE tenants SET name = 'FPI',  code = 'FPI'  WHERE id = ${FPFI_ID}`;
 
   // ── Migrate existing data to FPI tenant ──
   await sql`UPDATE incidents SET tenant_id = ${FPI_ID} WHERE tenant_id IS NULL`;
@@ -293,41 +284,10 @@ export async function initDb(): Promise<void> {
 // ─── Tenants ───
 
 export const dbTenants = {
-  async getAll(): Promise<Tenant[]> {
-    await initTables();
-    const { rows } = await sql`SELECT * FROM tenants ORDER BY name ASC`;
-    return rows.map(mapTenant);
-  },
-
   async getById(id: string): Promise<Tenant | null> {
     await initTables();
     const { rows } = await sql`SELECT * FROM tenants WHERE id = ${id}`;
     return rows.length > 0 ? mapTenant(rows[0]) : null;
-  },
-
-  async getByCode(code: string): Promise<Tenant | null> {
-    await initTables();
-    const { rows } = await sql`SELECT * FROM tenants WHERE code = ${code} AND active = true`;
-    return rows.length > 0 ? mapTenant(rows[0]) : null;
-  },
-
-  async create(tenant: Tenant): Promise<void> {
-    await initTables();
-    await sql`
-      INSERT INTO tenants (id, name, code, active, created_at, logo_url)
-      VALUES (${tenant.id}, ${tenant.name}, ${tenant.code}, ${tenant.active}, ${tenant.createdAt}, ${tenant.logoUrl ?? null})
-    `;
-  },
-
-  async update(id: string, fields: { name?: string; logoUrl?: string | null }): Promise<void> {
-    await initTables();
-    await sql`
-      UPDATE tenants
-      SET
-        name     = COALESCE(${fields.name ?? null}, name),
-        logo_url = CASE WHEN ${fields.logoUrl !== undefined} THEN ${fields.logoUrl ?? null} ELSE logo_url END
-      WHERE id = ${id}
-    `;
   },
 };
 

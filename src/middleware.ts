@@ -3,7 +3,6 @@ import { verifySessionToken } from "@/lib/auth";
 import type { UserRole } from "@/lib/schemas";
 
 const routeRoles: Record<string, UserRole[]> = {
-  "/platform": ["super_admin"],
   "/admin": ["admin", "owner", "super_admin"],
   "/lab": ["quality_tech", "admin", "owner", "super_admin"],
   "/view": ["engineer", "admin", "owner", "super_admin"],
@@ -18,12 +17,11 @@ const routeRoles: Record<string, UserRole[]> = {
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
-  // Skip login pages
-  if (pathname === "/admin/login" || pathname === "/login") {
+  // Skip login page
+  if (pathname === "/login") {
     return NextResponse.next();
   }
 
-  // Find which protected route this matches
   const matchedRoute = Object.keys(routeRoles).find((route) =>
     pathname.startsWith(route)
   );
@@ -49,7 +47,7 @@ export async function middleware(request: NextRequest) {
       shipping: "/shipments",
       admin: "/admin",
       owner: "/admin",
-      super_admin: "/platform",
+      super_admin: "/admin",
       maintenance_manager: "/maintenance",
       maintenance_tech: "/maintenance",
       receiving: "/ops",
@@ -62,5 +60,5 @@ export async function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/platform/:path*", "/admin/:path*", "/lab/:path*", "/view/:path*", "/shipments/:path*", "/checklists/:path*", "/quality/:path*", "/documents/:path*", "/maintenance/:path*", "/ops/:path*"],
+  matcher: ["/admin/:path*", "/lab/:path*", "/view/:path*", "/shipments/:path*", "/checklists/:path*", "/quality/:path*", "/documents/:path*", "/maintenance/:path*", "/ops/:path*"],
 };

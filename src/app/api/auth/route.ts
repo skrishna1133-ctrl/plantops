@@ -1,10 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { createSessionToken, verifySessionToken, verifyPassword } from "@/lib/auth";
-import { dbUsers, dbTenants } from "@/lib/db";
+import { dbUsers } from "@/lib/db";
 
 const ADMIN_ID = process.env.ADMIN_ID || "admin";
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || "admin123";
+const FPI_TENANT_ID = "00000000-0000-0000-0000-000000000001";
 
 export async function GET(request: NextRequest) {
   try {
@@ -22,10 +23,9 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({
         authenticated: true,
         userId: "bootstrap",
-        role: "super_admin",
-        fullName: "Platform Admin",
-        tenantId: null,
-        tenantName: null,
+        role: "admin",
+        fullName: "Admin",
+        tenantId: FPI_TENANT_ID,
       });
     }
 
@@ -34,22 +34,12 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ authenticated: false }, { status: 401 });
     }
 
-    let tenantName: string | null = null;
-    let tenantLogoUrl: string | null = null;
-    if (payload.tenantId) {
-      const tenant = await dbTenants.getById(payload.tenantId);
-      tenantName = tenant?.name ?? null;
-      tenantLogoUrl = tenant?.logoUrl ?? null;
-    }
-
     return NextResponse.json({
       authenticated: true,
       userId: user.id,
       role: user.role,
       fullName: user.fullName,
-      tenantId: payload.tenantId,
-      tenantName,
-      tenantLogoUrl,
+      tenantId: FPI_TENANT_ID,
     });
   } catch {
     return NextResponse.json({ authenticated: false }, { status: 401 });
@@ -59,37 +49,14 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { username, password, companyCode } = body;
+    const { username, password } = body;
 
-    if (!companyCode) {
-      return NextResponse.json({ error: "Company code is required" }, { status: 400 });
-    }
-
-    const code = String(companyCode).toUpperCase().trim();
-
-    // PLATFORM code → super_admin or bootstrap fallback
-    if (code === "PLATFORM") {
-      // Try DB super_admin user first (tenantId: null = look for users with no tenant)
-      const dbUser = await dbUsers.getByUsername(username, null);
-      if (dbUser && dbUser.role === "super_admin") {
-        const valid = await verifyPassword(password, dbUser.passwordHash);
-        if (valid) {
-          const token = await createSessionToken({ userId: dbUser.id, role: dbUser.role, tenantId: null });
-          const cookieStore = await cookies();
-          cookieStore.set("plantops_session", token, {
-            httpOnly: true,
-            secure: process.env.NODE_ENV === "production",
-            sameSite: "lax",
-            maxAge: 60 * 60 * 24,
-            path: "/",
-          });
-          return NextResponse.json({ success: true, role: dbUser.role });
-        }
-      }
-
-      // Bootstrap admin env var fallback
-      if (username === ADMIN_ID && password === ADMIN_PASSWORD) {
-        const token = await createSessionToken({ userId: "bootstrap", role: "super_admin", tenantId: null });
+    // Try DB user first
+    const dbUser = await dbUsers.getByUsername(username, FPI_TENANT_ID);
+    if (dbUser) {
+      const valid = await verifyPassword(password, dbUser.passwordHash);
+      if (valid && dbUser.active) {
+        const token = await createSessionToken({ userId: dbUser.id, role: dbUser.role, tenantId: FPI_TENANT_ID });
         const cookieStore = await cookies();
         cookieStore.set("plantops_session", token, {
           httpOnly: true,
@@ -98,38 +65,25 @@ export async function POST(request: NextRequest) {
           maxAge: 60 * 60 * 24,
           path: "/",
         });
-        return NextResponse.json({ success: true, role: "super_admin" });
+        return NextResponse.json({ success: true, role: dbUser.role });
       }
-
-      return NextResponse.json({ error: "Invalid credentials or company code" }, { status: 401 });
     }
 
-    // Regular tenant login: look up tenant by code
-    const tenant = await dbTenants.getByCode(code);
-    if (!tenant) {
-      return NextResponse.json({ error: "Invalid credentials or company code" }, { status: 401 });
+    // Bootstrap admin fallback
+    if (username === ADMIN_ID && password === ADMIN_PASSWORD) {
+      const token = await createSessionToken({ userId: "bootstrap", role: "admin", tenantId: FPI_TENANT_ID });
+      const cookieStore = await cookies();
+      cookieStore.set("plantops_session", token, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === "production",
+        sameSite: "lax",
+        maxAge: 60 * 60 * 24,
+        path: "/",
+      });
+      return NextResponse.json({ success: true, role: "admin" });
     }
 
-    const dbUser = await dbUsers.getByUsername(username, tenant.id);
-    if (!dbUser) {
-      return NextResponse.json({ error: "Invalid credentials or company code" }, { status: 401 });
-    }
-
-    const valid = await verifyPassword(password, dbUser.passwordHash);
-    if (!valid) {
-      return NextResponse.json({ error: "Invalid credentials or company code" }, { status: 401 });
-    }
-
-    const token = await createSessionToken({ userId: dbUser.id, role: dbUser.role, tenantId: tenant.id });
-    const cookieStore = await cookies();
-    cookieStore.set("plantops_session", token, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "lax",
-      maxAge: 60 * 60 * 24,
-      path: "/",
-    });
-    return NextResponse.json({ success: true, role: dbUser.role });
+    return NextResponse.json({ error: "Invalid username or password" }, { status: 401 });
   } catch (error) {
     console.error("Auth error:", error);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
